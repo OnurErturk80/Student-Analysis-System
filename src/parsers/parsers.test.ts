@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as XLSX from 'xlsx'
 import { kazanimCoz, okuBuffer, sinavKimligi } from './kazanim'
+import { kurCoz, kurTarihleri, pdfCoz, pdfTuru } from './pdf'
 import { ogrenciListesiCoz } from './ogrenciListesi'
 import { haftaAnahtari } from '../lib/weeks'
 
@@ -73,5 +74,65 @@ varsa('PDF toplu sonuç listeleri', () => {
         expect(c.veri.dogrulanamayan).toBe(0)
       }
     }
+  }, 60000)
+})
+
+describe('CSV', () => {
+  const csv = 'Ders;Kod;Kazanım;Soru Sayısı;1-ALİ VELİ;2-AYŞE ÇİÇEK\r\nMatematik.08;M1 (100);Üslü, kök;3;66,7;100\r\nMatematik.08;M2 (100);Kareköklü;7;0;85,7\r\n'
+  const baslik = 'Sınavlar: 8_MATEMATİK_TARAMA_2(20.10.2026)\r\n\r\n'
+  it('UTF-8, noktalı virgül ve virgüllü ondalıkları doğru okur', () => {
+    const c = kazanimCoz(okuBuffer(new TextEncoder().encode(baslik + csv), '8_A.csv'), '8_A.csv')
+    expect(c.ok).toBe(true)
+    if (c.ok) { expect(c.veri.satirlar).toHaveLength(4); expect(c.veri.satirlar[0].yuzde).toBeCloseTo(66.7); expect(c.veri.satirlar[0].sube).toBe('A'); expect(c.veri.tarih).toBe('2026-10-20'); expect(c.veri.sinif).toBe(8) }
+  })
+  it('Windows-1254 (Türkçe Excel) kodlamasını çözer', () => {
+    const tr1254: Record<string, number> = { İ: 0xdd, ı: 0xfd, Ç: 0xc7, ç: 0xe7, Ş: 0xde, ş: 0xfe, Ğ: 0xd0, ğ: 0xf0, Ü: 0xdc, ü: 0xfc, Ö: 0xd6, ö: 0xf6 }
+    const bytes = Uint8Array.from([...(baslik + csv)].map(ch => tr1254[ch] ?? ch.charCodeAt(0)))
+    const c = kazanimCoz(okuBuffer(bytes, '8_B.csv'), '8_B.csv')
+    expect(c.ok).toBe(true)
+    if (c.ok) { expect(c.veri.satirlar[3].ogrenciAd).toBe('AYŞE ÇİÇEK'); expect(c.veri.satirlar[0].ders).toBe('Matematik') }
+  })
+})
+describe('kur tarihleri', () => {
+  it('Kaynaklar satırını ayrıştırır', () => {
+    expect(kurTarihleri('Kaynaklar: Matematik 5 Ekim 2026; LİDEP 10 Ekim 2026.')).toEqual({ Matematik: '2026-10-05', LİDEP: '2026-10-10' })
+  })
+})
+varsa('kur listesi ve şüpheli net (gerçek PDF)', () => {
+  const pdfjs = () => import('pdfjs-dist/legacy/build/pdf.mjs')
+  const al = async (ad: RegExp) => {
+    const f = readdirSync(kaynak!).find(d => ad.test(d))!
+    return (await pdfjs()).getDocument({ data: new Uint8Array(readFileSync(join(kaynak!, f))), useSystemFonts: true }).promise
+  }
+  it('kur PDF: türü tanır, tarih ve kurları okur, öğrenci listesiyle örtüşür', async () => {
+    const belge = (await al(/KURLAR/)) as never
+    expect(await pdfTuru(belge)).toBe('kur')
+    const c = await kurCoz(belge)
+    expect(c.ok).toBe(true)
+    if (!c.ok) return
+    expect(c.veri.tarihler).toEqual({ Matematik: '2026-10-05', LİDEP: '2026-10-10' })
+    const liste = ogrenciListesiCoz(okuBuffer(readFileSync(join(kaynak!, readdirSync(kaynak!).find(d => /\.xlsx$/i.test(d))!)))).ogrenciler
+    const no = new Set(liste.map(o => o.no))
+    const kurOgr = new Set(c.veri.satirlar.map(s => s.ogrenciNo))
+    const eslesen = [...kurOgr].filter(n => no.has(n)).length
+    console.log('kur satır', c.veri.satirlar.length, 'öğrenci', kurOgr.size, 'listede', eslesen, 'okunamayan', c.veri.atlananSatir)
+    expect(eslesen / kurOgr.size).toBeGreaterThan(0.95)
+    expect(c.veri.atlananSatir).toBe(0)
+    expect(c.veri.satirlar.every(s => 'ABCDEF'.includes(s.kur))).toBe(true)
+  })
+  it('bozulan bir net şüpheli işaretlenir', async () => {
+    const belge = (await al(/MATEMATI_K_TARAMA_113/)) as never as { numPages: number; getPage(n: number): Promise<{ getTextContent(): Promise<{ items: { str: string; transform: number[] }[] }> }> }
+    const sarmal = { numPages: belge.numPages, async getPage(n: number) {
+      const p = await belge.getPage(n)
+      return { async getTextContent() {
+        const tc = await p.getTextContent()
+        if (n !== 1) return tc
+        let bozuldu = false
+        return { items: tc.items.map(i => (!bozuldu && i.str === '20' && i.transform[4] > 440 ? ((bozuldu = true), { ...i, str: '19' }) : i)) }
+      } }
+    } }
+    const c = await pdfCoz(sarmal as never)
+    expect(c.ok).toBe(true)
+    if (c.ok) { expect(c.veri.dogrulanamayan).toBe(1); expect(c.veri.satirlar.filter(s => s.supheli)).toHaveLength(1) }
   }, 60000)
 })

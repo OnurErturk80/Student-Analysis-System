@@ -4,22 +4,28 @@ import { Modal } from './bits'
 import { indir } from '../google/drive'
 import { okuBuffer, parmakIzi, XLSX } from '../parsers/kazanim'
 import type { SutunSablonu } from '../types'
+import { pdfOku } from '../parsers/pdfYukle'
+import { sinavKimligi } from '../parsers/kazanim'
+import type { PdfSonucu } from '../parsers/pdf'
 
 /** "Kontrol bekliyor" listesi + sütun eşleştirme (şablon olarak kaydedilir) */
 export function KontrolListesi({ kapat }: { kapat: () => void }) {
   const dosyalar = useStore(s => s.db.islenenDosyalar.filter(d => d.durum === 'Kontrol bekliyor'))
   const [acik, setAcik] = useState<string | null>(null)
-  if (acik) return <Eslestir dosyaId={acik} kapat={() => setAcik(null)} />
+  if (acik) {
+    const pdf = /\.pdf$/i.test(dosyalar.find(d => d.dosyaId === acik)?.ad ?? '')
+    return pdf ? <PdfOnizleme dosyaId={acik} kapat={() => setAcik(null)} /> : <Eslestir dosyaId={acik} kapat={() => setAcik(null)} />
+  }
   return (
     <Modal baslik="Kontrol bekliyor" kapat={kapat}>
       {dosyalar.length === 0 ? <p className="text-muted">Kontrol bekleyen dosya yok.</p> : (
         <ul className="divide-y divide-line">{dosyalar.map(d => (
           <li key={d.dosyaId} className="py-3 flex items-center gap-3">
             <div className="flex-1 min-w-0"><div className="font-medium break-all">{d.ad}</div><div className="text-sm text-down">{d.ayrinti}</div></div>
-            {!/\.pdf$/i.test(d.ad) && <button className="btn" onClick={() => setAcik(d.dosyaId)}>Sütunları eşleştir</button>}
+            <button className="btn" onClick={() => setAcik(d.dosyaId)}>{/\.pdf$/i.test(d.ad) ? 'Önizle' : 'Sütunları eşleştir'}</button>
           </li>))}</ul>
       )}
-      <p className="text-xs text-muted mt-3">PDF'ler sonuç listesi biçiminde değilse (ör. kur listesi) buraya düşer. Düzenlenebilir önizleme sonraki sürümde.</p>
+      <p className="text-xs text-muted mt-3">PDF'ler tanınmazsa ya da net değerleri doğru−yanlış/3 ile uyuşmazsa buraya düşer; önizlemede düzeltip onaylayabilirsiniz.</p>
     </Modal>
   )
 }
@@ -34,7 +40,7 @@ function Eslestir({ dosyaId, kapat }: { dosyaId: string; kapat: () => void }) {
   useEffect(() => {
     if (mod === 'demo') { setHata('Demo modunda dosya yok.'); return }
     indir({ id: dosyaId, name: d.ad, mimeType: '', modifiedTime: '' }).then(b => {
-      const wb = okuBuffer(b)
+      const wb = okuBuffer(b, d.ad)
       const t = (XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' }) as unknown[][])
         .slice(0, 15).map(r => r.slice(0, 14).map(c => String(c ?? '')))
       setTablo(t)
@@ -70,6 +76,54 @@ function Eslestir({ dosyaId, kapat }: { dosyaId: string; kapat: () => void }) {
         <label className="block mt-2"><span className="text-sm font-medium">Şablon adı (yayınevi)</span><input className="w-full mt-1" value={ad} onChange={e => setAd(e.target.value)} /></label>
         <button className="btn btn-primary w-full mt-4" disabled={!tamam} onClick={() => void kaydet()}>Şablonu kaydet ve dosyayı yeniden işle</button>
       </>)}
+    </Modal>
+  )
+}
+
+function PdfOnizleme({ dosyaId, kapat }: { dosyaId: string; kapat: () => void }) {
+  const d = useStore(s => s.db.islenenDosyalar.find(x => x.dosyaId === dosyaId))!
+  const { mod, pdfOnayla, dosyaAtla } = useStore()
+  const [veri, setVeri] = useState<PdfSonucu | null>(null)
+  const [mesaj, setMesaj] = useState('')
+  const [tumu, setTumu] = useState(false)
+  const [onay, setOnay] = useState(false)
+  const [calisiyor, setCalisiyor] = useState(false)
+  useEffect(() => {
+    if (mod === 'demo') { setMesaj('Demo modunda dosya yok.'); return }
+    indir({ id: dosyaId, name: d.ad, mimeType: '', modifiedTime: '' }).then(pdfOku).then(i => {
+      if (i.tur === 'kur') setMesaj(i.c.ok ? 'Bu bir kur listesi; önizleme gerekmeden işlenebilir. Dosya değişirse Analiz Et ile yeniden işlenir.' : i.c.neden)
+      else if (!i.c.ok) setMesaj(i.c.neden + '. Bu PDF elle düzeltilemiyor; sütun düzeni tanınmadı.')
+      else setVeri(i.c.veri)
+    }).catch(e => setMesaj(e.message))
+  }, [dosyaId, d.ad, mod])
+  const supheli = veri?.satirlar.filter(s => s.supheli).length ?? 0
+  const gorunen = veri ? (tumu ? veri.satirlar : veri.satirlar.filter(s => s.supheli)) : []
+  const degistir = (i: number, net: number) => setVeri(v => v && ({ ...v, satirlar: v.satirlar.map((s, k) => (k === i ? { ...s, net, supheli: false } : s)) }))
+  return (
+    <Modal baslik="PDF önizleme" kapat={kapat}>
+      <p className="text-sm text-muted mb-2 break-all">{d.ad}</p>
+      {!veri && !mesaj && <p className="text-muted">Okunuyor…</p>}
+      {mesaj && <p className="text-down text-sm mb-3">{mesaj}</p>}
+      {veri && (<>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="text-sm font-medium col-span-2">Sınav adı<input className="w-full mt-1" value={veri.sinavAd} onChange={e => setVeri({ ...veri, sinavAd: e.target.value })} /></label>
+          <label className="text-sm font-medium">Tarih<input type="date" className="w-full mt-1" value={veri.tarih ?? ''} onChange={e => setVeri({ ...veri, tarih: e.target.value || null })} /></label>
+          <div className="text-sm self-end pb-3">{veri.satirlar.length} satır · <b className={supheli ? 'text-down' : 'text-up'}>{supheli} şüpheli</b></div>
+        </div>
+        <label className="flex items-center gap-2 min-h-11"><input type="checkbox" className="!min-h-0 w-5 h-5" checked={tumu} onChange={e => setTumu(e.target.checked)} />Tüm satırları göster</label>
+        <div className="border border-line rounded-xl max-h-72 overflow-auto"><table className="w-full text-sm"><thead className="sticky top-0 bg-card"><tr className="text-left text-muted"><th className="p-2">No</th><th className="p-2">Ad</th><th className="p-2">Ders</th><th className="p-2 w-24">Net</th></tr></thead><tbody>
+          {gorunen.length === 0 && <tr><td colSpan={4} className="p-3 text-muted">Şüpheli satır yok.</td></tr>}
+          {gorunen.map(s => { const i = veri.satirlar.indexOf(s); return (
+            <tr key={i} className={s.supheli ? 'bg-warn' : ''}><td className="p-2">{s.ogrenciNo}</td><td className="p-2">{s.ogrenciAd}</td><td className="p-2">{s.ders}</td>
+              <td className="p-2"><input type="number" step="0.01" className="w-24 !min-h-9" aria-label={`${s.ogrenciAd} ${s.ders} net`} value={s.net} onChange={e => degistir(i, Number(e.target.value))} /></td></tr>) })}
+        </tbody></table></div>
+        {supheli > 0 && <label className="flex items-center gap-2 min-h-11 mt-2 text-sm"><input type="checkbox" className="!min-h-0 w-5 h-5" checked={onay} onChange={e => setOnay(e.target.checked)} />Şüpheli satırları kontrol ettim, olduğu gibi işle</label>}
+        <button className="btn btn-primary w-full mt-3" disabled={calisiyor || (supheli > 0 && !onay)} onClick={async () => {
+          setCalisiyor(true)
+          await pdfOnayla(dosyaId, { ...veri, sinavId: sinavKimligi(veri.sinavAd) }); kapat()
+        }}>Onayla ve işle</button>
+      </>)}
+      <button className="btn w-full mt-2" onClick={async () => { await dosyaAtla(dosyaId); kapat() }}>Bu dosyayı atla (işlenmiş say)</button>
     </Modal>
   )
 }

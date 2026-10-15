@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { DB, Gorusme, KurKaydi, KurTuru, Ayarlar, SutunSablonu, TabAdi } from './types'
 import { bosDB } from './types'
 import { analizEt, guncelKur, type Analiz, type Gosterim } from './analysis/engine'
-import { kazanimIsle, netIsle, ogrenciListesiIsle } from './analysis/ingest'
+import { kazanimIsle, kurIsle, netIsle, ogrenciListesiIsle } from './analysis/ingest'
 import { demoDB, demoNetEkle, demoYeniHafta } from './data/demo'
 import { CLIENT_ID, cikisYap, eposta, girisYap } from './google/auth'
 import { agacDosyalari, indir, klasorAra, klasorBilgi, KLASOR, type DriveDosya } from './google/drive'
@@ -10,6 +10,7 @@ import { dbBul, dbKaydet, dbOlustur, dbYukle, DB_ADI } from './google/sheets'
 import { kazanimCoz, okuBuffer, parmakIzi, type Cozum } from './parsers/kazanim'
 import { ogrenciListesiCoz } from './parsers/ogrenciListesi'
 import { pdfOku } from './parsers/pdfYukle'
+import type { PdfSonucu } from './parsers/pdf'
 import { bugun } from './lib/weeks'
 
 export type Mod = 'giris' | 'demo' | 'google'
@@ -24,7 +25,7 @@ const guvenli = {
   yaz: (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { /* */ } },
   sil: (k: string) => { try { localStorage.removeItem(k) } catch { /* */ } },
 }
-const DESTEK = /\.(xls|xlsx|pdf)$/i
+const DESTEK = /\.(xls|xlsx|csv|pdf)$/i
 const PDF = /\.pdf$/i
 const OGR_LISTESI = /[ÖO]ğ?renci\s*Listesi/i
 const yenile = (db: DB) => ({ db: { ...db }, analiz: analizEt(db) })
@@ -58,6 +59,8 @@ interface State {
   kurDegistir(no: string, tur: KurTuru, yeni: string, neden: string): Promise<void>
   ayarKaydet(a: Ayarlar): Promise<void>
   sablonKaydet(s: SutunSablonu, dosyaId: string): Promise<void>
+  pdfOnayla(dosyaId: string, veri: PdfSonucu): Promise<void>
+  dosyaAtla(dosyaId: string): Promise<void>
 }
 
 export const useStore = create<State>((set, get) => ({
@@ -165,8 +168,22 @@ export const useStore = create<State>((set, get) => ({
         }
         const veri = await indir({ id: b.id, name: b.ad, mimeType: b.mimeType, modifiedTime: b.modifiedTime } as DriveDosya)
         if (PDF.test(b.ad)) {
-          const c = await pdfOku(veri)
+          const icerik = await pdfOku(veri)
+          if (icerik.tur === 'kur') {
+            const c = icerik.c
+            if (!c.ok) { kaydet(b, 'Kontrol bekliyor', c.neden); ozet.hata.push(`${b.ad}: ${c.neden}. "Kontrol bekliyor" listesine alındı`); continue }
+            const k = kurIsle(db, c.veri, b.modifiedTime); dokunulan.add('kur_gecmisi')
+            const not = [k.atlanan ? `${k.atlanan} satır öğrenci listesinde olmadığı için atlandı` : '', k.daYeni ? `${k.daYeni} öğrencide daha yeni bir kur kaydı olduğu için dokunulmadı` : '', c.veri.atlananSatir ? `${c.veri.atlananSatir} satır okunamadı` : ''].filter(Boolean)
+            kaydet(b, 'İşlendi', not.join('; '))
+            ozet.satirlar.push(`Kur listesi: ${k.yeni} kur güncellendi, ${k.ayni} değişmedi${not.length ? ` (${not.join('; ')})` : ''}`)
+            continue
+          }
+          const c = icerik.c
           if (!c.ok) { kaydet(b, 'Kontrol bekliyor', c.neden); ozet.hata.push(`${b.ad}: ${c.neden}. "Kontrol bekliyor" listesine alındı`); continue }
+          if (c.veri.dogrulanamayan > 0) {
+            const m = `${c.veri.dogrulanamayan} hücrede net doğrulanamadı, önizlemeyle kontrol edin`
+            kaydet(b, 'Kontrol bekliyor', m); ozet.hata.push(`${b.ad}: ${m}`); continue
+          }
           const n = netIsle(db, c.veri, b.id, b.modifiedTime)
           ;(['sinavlar', 'ders_sonuclari'] as TabAdi[]).forEach(t => dokunulan.add(t))
           const uyar = [n.atlanan ? `${n.atlanan} satır öğrenci listesinde olmadığı için atlandı` : '', ...c.veri.uyarilar].filter(Boolean)
@@ -174,7 +191,7 @@ export const useStore = create<State>((set, get) => ({
           ozet.satirlar.push(`${c.veri.sinavAd}: ${n.eslesen} öğrenci için net işlendi${uyar.length ? ` (${uyar.join('; ')})` : ''}`)
           continue
         }
-        const wb = okuBuffer(veri)
+        const wb = okuBuffer(veri, b.ad)
         if (b.tur === 'ogrenciListesi') {
           const { ogrenciler, uyarilar } = ogrenciListesiCoz(wb)
           if (!ogrenciler.length) throw new Error('Öğrenci bulunamadı: ' + uyarilar.join('; '))
@@ -228,6 +245,19 @@ export const useStore = create<State>((set, get) => ({
     db.islenenDosyalar = db.islenenDosyalar.filter(d => d.dosyaId !== dosyaId)
     await get().kaydet(['kurallar', 'islenen_dosyalar'])
     await get().tara()
+  },
+  /** Önizlemede düzeltilen PDF sonucunu işler */
+  async pdfOnayla(dosyaId, veri) {
+    const db = get().db
+    const d = db.islenenDosyalar.find(x => x.dosyaId === dosyaId)
+    const n = netIsle(db, veri, dosyaId, d?.sonDegisiklik ?? new Date().toISOString())
+    if (d) Object.assign(d, { durum: 'İşlendi', ayrinti: 'Önizlemede onaylandı' + (n.atlanan ? `; ${n.atlanan} satır atlandı` : ''), sinavId: n.sinavId, islenmeTarihi: new Date().toISOString() })
+    await get().kaydet(['sinavlar', 'ders_sonuclari', 'islenen_dosyalar'])
+  },
+  async dosyaAtla(dosyaId) {
+    const d = get().db.islenenDosyalar.find(x => x.dosyaId === dosyaId)
+    if (d) Object.assign(d, { durum: 'İşlendi', ayrinti: 'Elle atlandı', islenmeTarihi: new Date().toISOString() })
+    await get().kaydet(['islenen_dosyalar'])
   },
 }))
 export { klasorAra, parmakIzi }

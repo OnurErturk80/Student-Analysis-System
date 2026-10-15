@@ -1,6 +1,7 @@
 import type { DB, DersSonuc, Ogrenci, Sinav } from '../types'
 import type { KazanimDosyasi } from '../parsers/kazanim'
-import type { PdfSonucu } from '../parsers/pdf'
+import type { KurSonucu, PdfSonucu } from '../parsers/pdf'
+import { guncelKur } from './engine'
 import { adGuzel } from '../lib/tr'
 
 export interface IngestOzet { sinavId: string; ogrenci: number; yeniOgrenci: number; tarihKaynagi: 'dosya' | 'degisiklik' }
@@ -81,4 +82,23 @@ export function netIsle(db: DB, v: PdfSonucu, dosyaId: string, degisiklikTarihi:
   db.sinavlar = [...db.sinavlar.filter(s => s.id !== id), yeni]
   sinav = yeni
   return { sinavId: id, eslesen: eslesen.size, atlanan, yeniSatir }
+}
+
+export interface KurOzet { yeni: number; ayni: number; atlanan: number; daYeni: number }
+/** Kur listesi: her öğrenci × kur türü için fark varsa kur geçmişine kayıt ekler. Tekrar çalıştırmak çift kayıt üretmez;
+ *  listeden daha yeni bir elle değişiklik varsa ezilmez. */
+export function kurIsle(db: DB, k: KurSonucu, degisiklikTarihi: string): KurOzet {
+  const bilinen = new Set(db.ogrenciler.map(o => o.no))
+  const o: KurOzet = { yeni: 0, ayni: 0, atlanan: 0, daYeni: 0 }
+  for (const s of k.satirlar) {
+    if (!bilinen.has(s.ogrenciNo)) { o.atlanan++; continue }
+    const tarih = k.tarihler[s.tur] ?? degisiklikTarihi.slice(0, 10)
+    const kayitlar = db.kurGecmisi.filter(x => x.ogrenciNo === s.ogrenciNo && x.tur === s.tur)
+    const mevcut = guncelKur(db, s.ogrenciNo, s.tur)
+    if (mevcut === s.kur) { o.ayni++; continue }
+    if (kayitlar.some(x => x.tarih > tarih)) { o.daYeni++; continue }
+    db.kurGecmisi.push({ id: Math.random().toString(36).slice(2, 10), ogrenciNo: s.ogrenciNo, tur: s.tur, tarih, eskiKur: mevcut ?? '', yeniKur: s.kur, neden: mevcut ? 'Kur listesinden güncellendi' : 'Kur listesinden' })
+    o.yeni++
+  }
+  return o
 }

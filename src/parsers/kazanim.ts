@@ -87,8 +87,8 @@ export function kazanimCoz(wb: XLSX.WorkBook, dosyaAdi: string, sablonlar: Sutun
       }
     }
     if (!b) return { ok: false, neden: `"${adi}" sekmesinde sütunlar tanınmadı`, ornek }
-    const m = adi.match(/(\d+)\s*[_\-/ ]\s*([A-ZÇĞİÖŞÜ])/i)
-    const sube = m ? trUpper(m[2]) : adi
+    const m = adi.match(/(\d+)\s*[_\-/ ]\s*([A-ZÇĞİÖŞÜ])/i) ?? dosyaAdi.match(/(\d+)\s*[_\-/ ]?\s*([A-F])(?![A-Za-zÇĞİÖŞÜçğıöşü])/i)
+    const sube = m ? trUpper(m[2]) : '?'
     const baslik = tablo[b.satir]
     const ogrenciler: { kol: number; no: string; ad: string }[] = []
     for (let k = b.ogrenciBaslangic; k < baslik.length; k++) {
@@ -115,7 +115,7 @@ export function kazanimCoz(wb: XLSX.WorkBook, dosyaAdi: string, sablonlar: Sutun
   }
   if (!satirlar.length) return { ok: false, neden: 'Okunabilir sonuç satırı bulunamadı', ornek }
   const { ad, tarih } = sinavBasligi(baslikHam || dosyaAdi)
-  const sinif = Number(satirlar.length ? (wb.SheetNames[0].match(/^\d+/) ?? ['8'])[0] : 8)
+  const sinif = Number((ad.match(/^\s*(\d{1,2})\s*[_/\- ]/) ?? wb.SheetNames[0].match(/^(\d+)/) ?? dosyaAdi.match(/(?:^|[^\d])(\d)\s*[_\-/. ]/) ?? [0, '8'])[1])
   return {
     ok: true,
     veri: { sinavAd: ad, sinavId: sinavKimligi(ad), tur: sinavTuru(ad), tarih: tarih ?? dosyaTarihi(dosyaAdi), sinif, satirlar },
@@ -125,7 +125,15 @@ export function dosyaTarihi(ad: string): string | null {
   const m = ad.match(/(\d{1,2})[._-](\d{1,2})[._-](\d{4})/)
   return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : null
 }
-export function okuBuffer(buf: ArrayBuffer | Uint8Array) {
+/** Excel (.xls/.xlsx, XML tabanlı .xls dahil) ve CSV okur. CSV: UTF-8 ya da Windows-1254 (Türkçe Excel), ; , veya sekme ayracı. */
+export function okuBuffer(buf: ArrayBuffer | Uint8Array, ad = '') {
+  if (/\.csv$/i.test(ad)) {
+    const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf)
+    let metin: string
+    try { metin = new TextDecoder('utf-8', { fatal: true }).decode(b) } catch { metin = new TextDecoder('windows-1254').decode(b) }
+    // raw: "66,7" gibi virgüllü ondalıklar sayıya çevrilip bozulmasın (66,7 → 667 olurdu)
+    return XLSX.read(metin.replace(/^\uFEFF/, ''), { type: 'string', raw: true })
+  }
   return XLSX.read(buf, { type: 'array', cellDates: false })
 }
 export { XLSX }

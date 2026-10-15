@@ -62,12 +62,13 @@ Student Analysis System/
 - Sütunlar tanınmazsa dosya **Kontrol bekliyor**’a düşer; **Sütunları eşleştir** ile bir kez eşleştirin, şablon olarak kaydedilir.
 - **Öğrenci Listesi.xlsx**: sekme adı sınıf/şubeyi (`8_A`) verir; öğrenci numarası eşleştirme anahtarıdır.
 - **PDF toplu sonuç listeleri** (“Toplu Sonuç Listesi”, “Şube Sıralı” dahil): ders netleri okunur ve her öğrenci için net = doğru − yanlış/3 ile doğrulanır. Sınav adı ve tarihi PDF’in başlığından alınır; aynı sınavın Excel’i ile otomatik birleşir. Grafiklerde **Yüzde / Net** düğmesi bu verilerle çalışır.
-- PDF sonuç listesi biçiminde değilse (ör. kur listesi) dosya **Kontrol bekliyor**’a düşer.
-- CSV: sonraki sürümde.
+- **Kur listesi PDF’i** (“Şubelere göre Kurlar”): Matematik ve LİDEP kurları (A en yüksek, F en düşük) okunur, tarihi “Kaynaklar” satırından alınır ve kur geçmişine yazılır. Tekrar işlemek çift kayıt üretmez; listeden daha yeni, elle yapılmış bir değişiklik ezilmez.
+- **CSV** (UTF-8 veya Türkçe Excel’in Windows-1254 kodlaması; `;` `,` ya da sekme ayracı; `66,7` gibi virgüllü ondalıklar): Excel kazanım raporuyla aynı düzende okunur. Şube, dosya adından (`8_A.csv`) alınır.
+- **Kontrol bekliyor:** PDF tanınmazsa ya da bir net, doğru−yanlış/3 ile uyuşmazsa dosya bu listeye düşer. Şüpheli satırları önizlemede düzeltip onaylayabilir ya da dosyayı atlayabilirsiniz.
 
 ## Sürümler
 - **Faz 1** (bu sürüm): Google girişi, klasör seçimi, öğrenci listesi, Excel kazanım okuma + sütun şablonu, “Analiz Et”, Panel, Öğrenci detayı + grafikler, Şube haritası, Kazanım analizi, Veli uyarıları (ara/WhatsApp/not), Kur önerileri (Matematik), Ayarlar.
-- **Faz 2** (kısmen yapıldı): PDF net okuma tamam. Kalanlar: “Kontrol bekliyor” düzenlenebilir önizleme, CSV, kur PDF’inden içe aktarma.
+- **Faz 2** (tamam): PDF net okuma, kur listesi içe aktarma, CSV, “Kontrol bekliyor” düzenlenebilir önizleme.
 - **Faz 3**: Kur kuralları ve LİDEP kuru, ayarların tamamı.
 - **Faz 4**: LGS net/puan tahmini, PDF karne, çevrimdışı önbellek.
 
