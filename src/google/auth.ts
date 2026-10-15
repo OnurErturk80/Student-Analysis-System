@@ -22,6 +22,12 @@ function betikYukle(): Promise<void> {
     document.head.appendChild(s)
   })
 }
+function hataMetni(kod?: string, ayrinti?: string) {
+  if (kod === 'access_denied') return 'Erişim reddedildi. Google Cloud → OAuth izin ekranı → Test kullanıcıları listesinde bu Google hesabı olmalı; izin ekranında da tüm istenen izinleri onaylamalısınız.'
+  return `Giriş başarısız: ${ayrinti || kod || 'bilinmeyen hata'}`
+}
+/** Giriş düğmesine basılmadan önce Google betiğini yükle: Safari, tıklamadan sonra ağ beklenirse açılır pencereyi engeller. */
+export const girisHazirla = () => hazirla().then(() => undefined)
 async function hazirla() {
   if (client) return client
   if (!CLIENT_ID) throw new Error('Google istemci kimliği tanımlı değil (VITE_GOOGLE_CLIENT_ID)')
@@ -29,11 +35,11 @@ async function hazirla() {
   client = window.google!.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID, scope: SCOPES,
     callback: (r: { access_token?: string; expires_in?: number; error?: string; error_description?: string }) => {
-      if (r.error || !r.access_token) bekleyen?.hata(new Error(r.error_description || r.error || 'Giriş başarısız'))
+      if (r.error || !r.access_token) bekleyen?.hata(new Error(hataMetni(r.error, r.error_description)))
       else { token = { value: r.access_token, exp: Date.now() + (r.expires_in ?? 3600) * 1000 }; bekleyen?.ok(r.access_token) }
       bekleyen = null
     },
-    error_callback: (e: { type?: string }) => { bekleyen?.hata(new Error(e.type === 'popup_closed' ? 'Giriş penceresi kapatıldı' : 'Giriş penceresi açılamadı')); bekleyen = null },
+    error_callback: (e: { type?: string; message?: string }) => { bekleyen?.hata(new Error(e.type === 'popup_closed' ? 'Giriş penceresi kapatıldı' : e.type === 'popup_failed_to_open' ? 'Tarayıcı giriş penceresini engelledi. Adres çubuğundaki “açılır pencere engellendi” bildiriminden izin verip tekrar deneyin.' : `Giriş penceresi açılamadı (${e.type ?? e.message ?? 'bilinmeyen'})`)); bekleyen = null },
   })
   return client
 }
