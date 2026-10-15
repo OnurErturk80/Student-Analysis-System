@@ -52,3 +52,29 @@ export function OzetDialog() {
     </Modal>
   )
 }
+
+/** Klasör taramasının ne bulduğunu gösterir: dosya gelmiyorsa nedenini görmek için */
+export function TaramaBilgisi() {
+  const { tarama, mod, hata } = useStore()
+  const [ac, setAc] = useState(false)
+  if (mod !== 'google') return null
+  return (
+    <>
+      {hata && <div role="alert" className="rounded-xl bg-warn border border-warnline text-down px-3 py-2 text-sm flex gap-2"><span className="flex-1">{hata}</span><button className="font-semibold" onClick={() => useStore.setState({ hata: null })} aria-label="Kapat">✕</button></div>}
+      {tarama && (
+        <div className="flex items-center gap-2 text-sm text-muted px-1">
+          <span className="flex-1">{tarama.toplam === 0 ? <b className="text-down">Seçili klasörde hiç dosya görünmüyor.</b> : <>Klasör taraması: <b className="text-ink">{tarama.toplam}</b> dosya, {tarama.klasor} klasör.</>}</span>
+          <button className="text-accent font-medium min-h-9" onClick={() => setAc(true)}>Ayrıntılar</button>
+        </div>)}
+      {ac && tarama && (
+        <Modal baslik="Klasör taraması" kapat={() => setAc(false)}>
+          {tarama.toplam === 0 && <p className="text-[15px] text-down mb-3">Uygulama seçili klasörde ya da alt klasörlerinde hiç dosya göremedi. Doğru klasörü seçtiğinizden (içinde “Öğrenci Listesi.xlsx” ve “Raporlar” olan klasör) ve dosyaların bu Google hesabıyla erişilebilir olduğundan emin olun. Ayarlar → “Drive klasörünü değiştir” ile klasörü yeniden seçebilirsiniz.</p>}
+          <p className="text-sm text-muted mb-2">{tarama.klasor} klasör tarandı, {tarama.toplam} dosya bulundu.</p>
+          <ul className="divide-y divide-line border border-line rounded-xl max-h-80 overflow-auto text-sm">
+            {tarama.satirlar.map((x, i) => <li key={i} className="px-3 py-2"><div className="font-medium break-all">{x.yol}{x.ad}</div><div className={x.durum.startsWith('Atlandı') || x.durum.startsWith('Hata') ? 'text-down' : x.durum === 'İşlendi' ? 'text-up' : 'text-muted'}>{x.durum}</div></li>)}
+            {tarama.satirlar.length === 0 && <li className="px-3 py-3 text-muted">Dosya yok</li>}
+          </ul>
+        </Modal>)}
+    </>
+  )
+}

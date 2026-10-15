@@ -1,10 +1,11 @@
 import { gapi } from './api'
 
-export interface DriveDosya { id: string; name: string; mimeType: string; modifiedTime: string; parents?: string[] }
+export interface DriveDosya { id: string; name: string; mimeType: string; modifiedTime: string; parents?: string[]; shortcutDetails?: { targetId: string; targetMimeType: string } }
 const D = 'https://www.googleapis.com/drive/v3/files'
 export const KLASOR = 'application/vnd.google-apps.folder'
 export const GSHEET = 'application/vnd.google-apps.spreadsheet'
-const alan = 'files(id,name,mimeType,modifiedTime,parents),nextPageToken'
+export const KISAYOL = 'application/vnd.google-apps.shortcut'
+const alan = 'files(id,name,mimeType,modifiedTime,parents,shortcutDetails),nextPageToken'
 
 export async function listele(q: string): Promise<DriveDosya[]> {
   const out: DriveDosya[] = []
@@ -21,18 +22,26 @@ export const altKlasorler = (ust: string) => listele(`'${ust}' in parents and mi
 export async function klasorBilgi(id: string) {
   return gapi<DriveDosya>(`${D}/${id}?fields=id,name,mimeType,modifiedTime,parents&supportsAllDrives=true`)
 }
-/** Klasörün tamamı (alt klasörler dahil) */
-export async function agacDosyalari(kok: string): Promise<(DriveDosya & { yol: string })[]> {
+/** Klasörün tamamı (alt klasörler dahil). Drive kısayolları hedef dosya/klasöre çözülür. */
+export async function agacDosyalari(kok: string): Promise<{ dosyalar: (DriveDosya & { yol: string })[]; klasorSayisi: number }> {
   const out: (DriveDosya & { yol: string })[] = []
   const kuyruk: { id: string; yol: string }[] = [{ id: kok, yol: '' }]
+  const gorulen = new Set<string>([kok])
+  let klasorSayisi = 1
   while (kuyruk.length) {
     const { id, yol } = kuyruk.shift()!
-    for (const f of await listele(`'${id}' in parents`)) {
-      if (f.mimeType === KLASOR) kuyruk.push({ id: f.id, yol: yol + f.name + '/' })
-      else out.push({ ...f, yol })
+    for (let f of await listele(`'${id}' in parents`)) {
+      if (f.mimeType === KISAYOL && f.shortcutDetails) {
+        // kısayolun adı kalır, kimlik/tür/tarih hedeften alınır
+        try { const h = await klasorBilgi(f.shortcutDetails.targetId); f = { ...h, name: f.name } } catch { out.push({ ...f, yol }); continue }
+      }
+      if (f.mimeType === KLASOR) {
+        if (gorulen.has(f.id)) continue
+        gorulen.add(f.id); klasorSayisi++; kuyruk.push({ id: f.id, yol: yol + f.name + '/' })
+      } else out.push({ ...f, yol })
     }
   }
-  return out
+  return { dosyalar: out, klasorSayisi }
 }
 export async function indir(f: DriveDosya): Promise<ArrayBuffer> {
   const url = f.mimeType === GSHEET

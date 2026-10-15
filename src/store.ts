@@ -17,6 +17,8 @@ export type Mod = 'giris' | 'demo' | 'google'
 export interface Bekleyen { id: string; ad: string; yol: string; mimeType: string; modifiedTime: string; tur: 'ogrenciListesi' | 'rapor' }
 export interface Ilerleme { toplam: number; biten: number; ad: string }
 export interface Ozet { satirlar: string[]; hata: string[] }
+export interface TaramaSatiri { ad: string; yol: string; durum: string }
+export interface Tarama { klasor: number; toplam: number; satirlar: TaramaSatiri[]; zaman: string }
 export interface Asama { adim: 'giris' | 'klasor' | 'yukle' | 'tamam'; mesaj?: string }
 
 const KLASOR_ANAHTAR = 'sas.klasorId'
@@ -40,6 +42,7 @@ interface State {
   klasorId: string | null
   dbId: string | null
   bekleyenler: Bekleyen[]
+  tarama: Tarama | null
   ilerleme: Ilerleme | null
   ozet: Ozet | null
   hata: string | null
@@ -65,7 +68,7 @@ interface State {
 
 export const useStore = create<State>((set, get) => ({
   mod: 'giris', asama: { adim: 'giris' }, email: '', db: bosDB(), analiz: null, klasorId: null, dbId: null,
-  bekleyenler: [], ilerleme: null, ozet: null, hata: null, yuklu: false,
+  bekleyenler: [], tarama: null, ilerleme: null, ozet: null, hata: null, yuklu: false,
   gosterim: guvenli.al('sas.gosterim') === 'net' ? 'net' : 'yuzde',
   gosterimDegis(g) { guvenli.yaz('sas.gosterim', g); set({ gosterim: g }) },
 
@@ -126,17 +129,21 @@ export const useStore = create<State>((set, get) => ({
     }
     if (!klasorId) return
     try {
-      const dosyalar = await agacDosyalari(klasorId)
+      const { dosyalar, klasorSayisi } = await agacDosyalari(klasorId)
       const islenen = new Map(db.islenenDosyalar.map(d => [d.dosyaId, d]))
       const bek: Bekleyen[] = []
+      const satirlar: TaramaSatiri[] = []
       for (const f of dosyalar) {
-        if (f.name === DB_ADI) continue
+        const gst = (durum: string) => satirlar.push({ ad: f.name, yol: f.yol, durum })
+        if (f.name === DB_ADI) { gst('Veritabanı dosyası, atlandı'); continue }
         const gsheet = f.mimeType === 'application/vnd.google-apps.spreadsheet'
-        if (!gsheet && !DESTEK.test(f.name)) continue
+        if (!gsheet && !DESTEK.test(f.name)) { gst(`Atlandı: desteklenmeyen tür (${f.mimeType.replace('application/', '')})`); continue }
         const e = islenen.get(f.id)
-        if (e && e.sonDegisiklik === f.modifiedTime && e.durum !== 'Hata') continue
+        if (e && e.sonDegisiklik === f.modifiedTime && e.durum !== 'Hata') { gst(e.durum === 'İşlendi' ? 'İşlendi' : e.durum + (e.ayrinti ? `: ${e.ayrinti}` : '')); continue }
+        gst(e ? 'Değişmiş, işlenmeyi bekliyor' : 'Yeni, işlenmeyi bekliyor')
         bek.push({ id: f.id, ad: f.name, yol: f.yol, mimeType: f.mimeType, modifiedTime: f.modifiedTime, tur: OGR_LISTESI.test(f.name) && f.yol === '' ? 'ogrenciListesi' : 'rapor' })
       }
+      set({ tarama: { klasor: klasorSayisi, toplam: dosyalar.length, satirlar, zaman: new Date().toISOString() }, hata: null })
       bek.sort((a, b) => Number(b.tur === 'ogrenciListesi') - Number(a.tur === 'ogrenciListesi') || a.ad.localeCompare(b.ad, 'tr'))
       set({ bekleyenler: bek })
     } catch (e) { set({ hata: (e as Error).message }) }
