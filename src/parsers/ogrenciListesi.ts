@@ -1,8 +1,10 @@
 import * as XLSX from 'xlsx'
 import type { Ogrenci, Veli } from '../types'
-import { anahtar, adGuzel, telTemizle } from '../lib/tr'
+import { anahtar, adGuzel, nfc, telTemizle } from '../lib/tr'
 
-const h = (v: unknown) => (v === null || v === undefined ? '' : String(v).trim())
+const h = (v: unknown) => (v === null || v === undefined ? '' : nfc(String(v)).trim())
+/** Dosya adı "Öğrenci Listesi" mi (Mac'ten yüklenen ayrışık Unicode ve "Ogrenci" yazımı dahil) */
+export const ogrenciListesiAdi = (ad: string) => /[ÖO][\s_]*[ğg]?[\s_]*renci[\s_]*Listesi/i.test(nfc(ad))
 
 /** Her sekme bir şube: "8_A". Başlık: Öğrenci Numara, Öğrenci Tam Adı, Veli (k) ... */
 export function ogrenciListesiCoz(wb: XLSX.WorkBook): { ogrenciler: Ogrenci[]; uyarilar: string[] } {

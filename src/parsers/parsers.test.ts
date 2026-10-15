@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import * as XLSX from 'xlsx'
 import { kazanimCoz, okuBuffer, sinavKimligi } from './kazanim'
 import { kurCoz, kurTarihleri, pdfCoz, pdfTuru } from './pdf'
+import { ogrenciListesiAdi } from './ogrenciListesi'
 import { ogrenciListesiCoz } from './ogrenciListesi'
 import { haftaAnahtari } from '../lib/weeks'
 
@@ -137,4 +138,22 @@ varsa('kur listesi ve şüpheli net (gerçek PDF)', () => {
     expect(c.ok).toBe(true)
     if (c.ok) { expect(c.veri.dogrulanamayan).toBe(1); expect(c.veri.satirlar.filter(s => s.supheli)).toHaveLength(1) }
   }, 60000)
+})
+
+describe('macOS ayrışık Unicode (NFD) dayanıklılığı', () => {
+  it('"Öğrenci Listesi" dosya adı NFD ya da NFC gelse de tanınır', () => {
+    for (const ad of ['Öğrenci Listesi.xlsx', 'Öğrenci Listesi.xlsx'.normalize('NFD'), 'Ogrenci_Listesi.xlsx', 'O_g_renci_Listesi.xlsx', 'öğrenci listesi (1).xlsx'.normalize('NFD')]) expect(ogrenciListesiAdi(ad), ad).toBe(true)
+    expect(ogrenciListesiAdi('Fenomen deneme.xls')).toBe(false)
+  })
+  it('NFD başlıklı öğrenci listesi ve kazanım matrisi okunur', () => {
+    const nfd = (x: string) => x.normalize('NFD')
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[], [nfd('TED Antalya Koleji Ortaokulu\nÖğrenci Listesi')], [], [], [], ['#', nfd('Öğrenci Numara'), nfd('Öğrenci Tam Adı'), nfd('Veli (1) Tam Adı'), nfd('Veli (1) Velinin Yakınlığı'), nfd('Veli (1) Mesaj Gönderi (Cep Tel)')], ['1', '464', nfd('AHMET EREN ALTUNTAŞ'), nfd('AYŞE ÇİÇEK'), 'Anne', '+90 532 111 22 33']]), '8_A')
+    const r = ogrenciListesiCoz(wb)
+    expect(r.ogrenciler).toHaveLength(1)
+    expect(r.ogrenciler[0].adSoyad).toBe('Ahmet Eren Altuntaş'); expect(r.ogrenciler[0].veliler[0].ad).toBe('Ayşe Çiçek'); expect(r.ogrenciler[0].veliler[0].tel).toBe('905321112233')
+    const w2 = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(w2, XLSX.utils.aoa_to_sheet([[], [nfd('Sınavlar: 8_MATEMATİK_TARAMA_1(13.10.2026)')], [], [nfd('Ders'), 'Kod', nfd('Kazanım'), nfd('Soru Sayısı'), nfd('464-AHMET EREN ALTUNTAŞ')], [nfd('Matematik.08'), 'M1 (100)', nfd('Üslü'), '3', '66,7']]), '8_A')
+    const c = kazanimCoz(w2, 'x.xls'); expect(c.ok).toBe(true)
+  })
 })

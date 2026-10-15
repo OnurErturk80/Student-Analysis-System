@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx'
 import type { SinavTuru, SutunSablonu } from '../types'
-import { anahtar, sayi, trUpper } from '../lib/tr'
+import { anahtar, nfc, sayi, trUpper } from '../lib/tr'
 
 export interface KazanimSatiri {
   sube: string; ogrenciNo: string; ogrenciAd: string
@@ -44,7 +44,7 @@ export function sinavKimligi(ad: string) {
   return anahtar(m ? m[1] : t.replace(/\(?\d{1,2}[./]\d{1,2}[./]\d{4}\)?/g, ''))
 }
 
-const hucre = (v: unknown) => (v === null || v === undefined ? '' : String(v).trim())
+const hucre = (v: unknown) => (v === null || v === undefined ? '' : nfc(String(v)).trim())
 const OGR_RE = /^\d+\s*-\s*\S/
 
 function tanimaBaslik(satirlar: string[][]) {

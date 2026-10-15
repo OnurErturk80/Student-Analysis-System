@@ -1,4 +1,6 @@
-export const trUpper = (s: string) => s.toLocaleUpperCase('tr')
+/** macOS/iOS dosya adları ve bazı Excel metinleri "ayrışık" Unicode (Ö = O + ¨) gelebilir; her karşılaştırmadan önce birleşik biçime (NFC) çevrilir */
+export const nfc = (s: string) => s.normalize('NFC')
+export const trUpper = (s: string) => nfc(s).toLocaleUpperCase('tr')
 /** Karşılaştırma anahtarı: büyük harf, noktalama/boşluk yok */
 export const anahtar = (s: string) => trUpper(s).replace(/[^A-Z0-9ÇĞİÖŞÜ]/g, '')
 export const sayi = (v: unknown): number | null => {
@@ -12,7 +14,7 @@ export const sayiYaz = (n: number, ondalik = 1) => n.toFixed(ondalik).replace('.
 export const bas = (ad: string) => ad.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(p => trUpper(p[0])).join('')
 /** Başlık durumuna çevir: "AHMET EREN" → "Ahmet Eren" */
 export const adGuzel = (s: string) =>
-  s.toLocaleLowerCase('tr').split(/\s+/).map(p => p.charAt(0).toLocaleUpperCase('tr') + p.slice(1)).join(' ')
+  nfc(s).toLocaleLowerCase('tr').split(/\s+/).map(p => p.charAt(0).toLocaleUpperCase('tr') + p.slice(1)).join(' ')
 export const telTemizle = (t: string) => {
   let d = t.replace(/\D/g, '')
   if (d.startsWith('00')) d = d.slice(2)
