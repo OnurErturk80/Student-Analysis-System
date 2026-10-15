@@ -167,8 +167,10 @@ export const useStore = create<State>((set, get) => ({
           (e.sinavId !== '' && !(db.sinavlar.some(s => s.id === e.sinavId) && db.dersSonuclari.some(r => r.sinavId === e.sinavId))) ||
           (kazanimDosyasi && e.sinavId !== '' && !db.kazanimSonuclari.some(r => r.sinavId === e.sinavId)) ||
           (db.ogrenciler.length === 0 && (e.sinavId !== '' || OGR_LISTESI.test(e.ad))))
-        if (e && !eksik && e.sonDegisiklik === f.modifiedTime && e.durum !== 'Hata') { gst(e.durum === 'İşlendi' ? 'İşlendi' : e.durum + (e.ayrinti ? `: ${e.ayrinti}` : '')); continue }
-        gst(eksik ? 'Veritabanında sonuçları yok, yeniden işlenecek' : e ? 'Değişmiş, işlenmeyi bekliyor' : 'Yeni, işlenmeyi bekliyor')
+        // "Öğrenci Listesi" daha önce tanınmayıp Kontrol bekliyor'a düşmüşse (eski hata) yeniden denenir
+        const yenidenDene = !!e && e.durum === 'Kontrol bekliyor' && OGR_LISTESI.test(e.ad)
+        if (e && !eksik && !yenidenDene && e.sonDegisiklik === f.modifiedTime && e.durum !== 'Hata') { gst(e.durum === 'İşlendi' ? 'İşlendi' : e.durum + (e.ayrinti ? `: ${e.ayrinti}` : '')); continue }
+        gst(eksik ? 'Veritabanında sonuçları yok, yeniden işlenecek' : yenidenDene ? 'Öğrenci listesi, yeniden denenecek' : e ? 'Değişmiş, işlenmeyi bekliyor' : 'Yeni, işlenmeyi bekliyor')
         bek.push({ id: f.id, ad: f.name, yol: f.yol, mimeType: f.mimeType, modifiedTime: f.modifiedTime, tur: OGR_LISTESI.test(f.name) ? 'ogrenciListesi' : 'rapor' })
       }
       set({ tarama: { klasor: klasorSayisi, toplam: dosyalar.length, satirlar, zaman: new Date().toISOString() }, hata: null })
@@ -328,3 +330,4 @@ export const useStore = create<State>((set, get) => ({
 export { klasorAra, parmakIzi }
 export type { Cozum }
 oturumDinle(() => useStore.setState({ oturumGerekli: true }))
+if (import.meta.env.DEV) (globalThis as unknown as { __store: typeof useStore }).__store = useStore // yalnızca geliştirme: tarayıcı testleri için
