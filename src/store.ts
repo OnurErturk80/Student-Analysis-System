@@ -6,9 +6,9 @@ import { kazanimIsle, kurIsle, netIsle, ogrenciListesiIsle } from './analysis/in
 import { demoDB, demoNetEkle, demoPuanEkle, demoYeniHafta } from './data/demo'
 import { CLIENT_ID, cikisYap, eposta, girisYap, kayitliEposta, kayitliOturum, oturumDinle } from './google/auth'
 import { agacDosyalari, indir, klasorAra, klasorBilgi, KLASOR, type DriveDosya } from './google/drive'
-import { dbBul, dbKaydet, dbOlustur, dbYukle, DB_ADI, SurumCakismasi, uzakSurum } from './google/sheets'
+import { dbBulHepsi, dbKaydet, dbOlustur, dbYukle, DB_ADI, SurumCakismasi, uzakSurum } from './google/sheets'
 import { kazanimCoz, okuBuffer, parmakIzi, type Cozum } from './parsers/kazanim'
-import { ogrenciListesiCoz } from './parsers/ogrenciListesi'
+import { ogrenciListesiAdi, ogrenciListesiCoz } from './parsers/ogrenciListesi'
 import { pdfOku } from './parsers/pdfYukle'
 import type { PdfSonucu } from './parsers/pdf'
 import { bugun } from './lib/weeks'
@@ -29,7 +29,7 @@ const guvenli = {
 }
 const DESTEK = /\.(xls|xlsx|csv|pdf)$/i
 const PDF = /\.pdf$/i
-const OGR_LISTESI = /[ÖO]ğ?renci\s*Listesi/i
+const OGR_LISTESI = { test: ogrenciListesiAdi }
 const yenile = (db: DB) => ({ db: { ...db }, analiz: analizEt(db) })
 const CAKISMA = 'Veriler başka bir cihazda değişmiş; güncel veriler yüklendi. Az önceki işleminizi tekrar yapın.'
 const kimlik = () => Math.random().toString(36).slice(2, 10)
@@ -49,6 +49,7 @@ interface State {
   hata: string | null
   yuklu: boolean
   sonKontrol: number
+  dbSayisi: number
   oturumGerekli: boolean
   gosterim: Gosterim
   gosterimDegis(g: Gosterim): void
@@ -79,6 +80,7 @@ export const useStore = create<State>((set, get) => ({
   mod: 'giris', asama: { adim: 'giris' }, email: '', db: bosDB(), analiz: null, klasorId: null, dbId: null,
   bekleyenler: [], tarama: null, ilerleme: null, ozet: null, hata: null, yuklu: false,
   sonKontrol: 0,
+  dbSayisi: 0,
   oturumGerekli: false,
   gosterim: guvenli.al('sas.gosterim') === 'net' ? 'net' : 'yuzde',
   gosterimDegis(g) { guvenli.yaz('sas.gosterim', g); set({ gosterim: g }) },
@@ -113,7 +115,9 @@ export const useStore = create<State>((set, get) => ({
     try {
       const bilgi = await klasorBilgi(id)
       if (bilgi.mimeType !== KLASOR) throw new Error('Seçilen öğe bir klasör değil')
-      let dbId = await dbBul(id)
+      const adaylar = await dbBulHepsi(id)
+      let dbId: string | null = adaylar[0]?.id ?? null
+      set({ dbSayisi: adaylar.length })
       let db: DB
       if (!dbId) {
         set({ asama: { adim: 'yukle', mesaj: `"${DB_ADI}" oluşturuluyor…` } })
@@ -153,15 +157,19 @@ export const useStore = create<State>((set, get) => ({
       const satirlar: TaramaSatiri[] = []
       for (const f of dosyalar) {
         const gst = (durum: string) => satirlar.push({ ad: f.name, yol: f.yol, durum })
-        if (f.name === DB_ADI) { gst('Veritabanı dosyası, atlandı'); continue }
+        if (f.name.normalize('NFC') === DB_ADI) { gst('Veritabanı dosyası, atlandı'); continue }
         const gsheet = f.mimeType === 'application/vnd.google-apps.spreadsheet'
         if (!gsheet && !DESTEK.test(f.name)) { gst(`Atlandı: desteklenmeyen tür (${f.mimeType.replace('application/', '')})`); continue }
         const e = islenen.get(f.id)
         // "İşlendi" denmiş ama sonuçları veritabanında yoksa (eski yazma hatası, başka cihaz) dosya yeniden işlenir
-        const eksik = !!e && e.durum === 'İşlendi' && ((e.sinavId !== '' && !(db.sinavlar.some(s => s.id === e.sinavId) && db.dersSonuclari.some(r => r.sinavId === e.sinavId))) || (e.sinavId === '' && OGR_LISTESI.test(e.ad) && db.ogrenciler.length === 0))
+        const kazanimDosyasi = !!e && /\.(xls|xlsx|csv)$/i.test(e.ad) && !OGR_LISTESI.test(e.ad)
+        const eksik = !!e && e.durum === 'İşlendi' && (
+          (e.sinavId !== '' && !(db.sinavlar.some(s => s.id === e.sinavId) && db.dersSonuclari.some(r => r.sinavId === e.sinavId))) ||
+          (kazanimDosyasi && e.sinavId !== '' && !db.kazanimSonuclari.some(r => r.sinavId === e.sinavId)) ||
+          (db.ogrenciler.length === 0 && (e.sinavId !== '' || OGR_LISTESI.test(e.ad))))
         if (e && !eksik && e.sonDegisiklik === f.modifiedTime && e.durum !== 'Hata') { gst(e.durum === 'İşlendi' ? 'İşlendi' : e.durum + (e.ayrinti ? `: ${e.ayrinti}` : '')); continue }
         gst(eksik ? 'Veritabanında sonuçları yok, yeniden işlenecek' : e ? 'Değişmiş, işlenmeyi bekliyor' : 'Yeni, işlenmeyi bekliyor')
-        bek.push({ id: f.id, ad: f.name, yol: f.yol, mimeType: f.mimeType, modifiedTime: f.modifiedTime, tur: OGR_LISTESI.test(f.name) && f.yol === '' ? 'ogrenciListesi' : 'rapor' })
+        bek.push({ id: f.id, ad: f.name, yol: f.yol, mimeType: f.mimeType, modifiedTime: f.modifiedTime, tur: OGR_LISTESI.test(f.name) ? 'ogrenciListesi' : 'rapor' })
       }
       set({ tarama: { klasor: klasorSayisi, toplam: dosyalar.length, satirlar, zaman: new Date().toISOString() }, hata: null })
       bek.sort((a, b) => Number(b.tur === 'ogrenciListesi') - Number(a.tur === 'ogrenciListesi') || a.ad.localeCompare(b.ad, 'tr'))

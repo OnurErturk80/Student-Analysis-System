@@ -1,11 +1,11 @@
 import { gapi } from './api'
 
-export interface DriveDosya { id: string; name: string; mimeType: string; modifiedTime: string; parents?: string[]; shortcutDetails?: { targetId: string; targetMimeType: string } }
+export interface DriveDosya { id: string; name: string; mimeType: string; modifiedTime: string; createdTime?: string; parents?: string[]; shortcutDetails?: { targetId: string; targetMimeType: string } }
 const D = 'https://www.googleapis.com/drive/v3/files'
 export const KLASOR = 'application/vnd.google-apps.folder'
 export const GSHEET = 'application/vnd.google-apps.spreadsheet'
 export const KISAYOL = 'application/vnd.google-apps.shortcut'
-const alan = 'files(id,name,mimeType,modifiedTime,parents,shortcutDetails),nextPageToken'
+const alan = 'files(id,name,mimeType,modifiedTime,createdTime,parents,shortcutDetails),nextPageToken'
 
 export async function listele(q: string): Promise<DriveDosya[]> {
   const out: DriveDosya[] = []

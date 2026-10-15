@@ -15,7 +15,7 @@ const ALANLAR: { k: SayiAnahtar; ad: string; ek: string }[] = [
   { k: 'lidepSinav', ad: 'LGS tahmini: son kaç deneme', ek: 'deneme' },
 ]
 export default function Ayarlar() {
-  const { db, ayarKaydet, mod, email, klasoruDegistir, cikis, tumunuYenidenIsle } = useStore()
+  const { db, ayarKaydet, mod, email, klasoruDegistir, cikis, tumunuYenidenIsle, dbSayisi, dbId, yenidenYukle } = useStore()
   const [yenidenMesaj, setYenidenMesaj] = useState('')
   const [e, setE] = useState<Esikler>({ ...db.ayarlar.esikler })
   const [wa, setWa] = useState(db.ayarlar.whatsappSablonu)
@@ -55,6 +55,16 @@ export default function Ayarlar() {
         <p className="text-sm text-muted mt-2">Boşsa, Drive klasörüne erişebilen herkes giriş yapabilir. Not: Bu liste arayüzü kısıtlar; verilerin asıl koruması Drive paylaşım ayarlarınızdır.</p>
       </Kart>
       <div className="flex items-center gap-3"><button className="btn btn-primary" onClick={() => void kaydet()}>Ayarları kaydet</button><span className="text-sm text-muted" role="status">{kayit}</span></div>
+      <Kart>
+        <Baslik>Veri durumu</Baslik>
+        <p className="text-sm text-muted mb-2">Uygulamanın şu an Drive’dan okuduğu veriler. Boş görünen bir tablo varsa dosyalar işlenmemiş ya da yazılamamıştır.</p>
+        <ul className="grid grid-cols-2 gap-x-6 gap-y-1 text-[15px]">
+          {([['Öğrenci (aktif / toplam)', `${db.ogrenciler.filter(o => o.aktif).length} / ${db.ogrenciler.length}`], ['Sınav', db.sinavlar.length], ['Ders sonuçları', db.dersSonuclari.length], ['Kazanım sonuçları', db.kazanimSonuclari.length], ['LGS puanları', db.lgsPuanlari.length], ['Kur kayıtları', db.kurGecmisi.length], ['Görüşme notları', db.gorusmeler.length], ['İşlenen dosya', db.islenenDosyalar.length]] as [string, string | number][]).map(([a, b]) => (
+            <li key={a} className="flex justify-between gap-2 border-b border-line py-1"><span className="text-muted">{a}</span><b className="tabular-nums">{b}</b></li>))}
+        </ul>
+        {mod === 'google' && dbSayisi > 1 && <p className="mt-3 text-sm rounded-xl bg-warn text-down px-3 py-2" role="alert">Klasörde <b>{dbSayisi}</b> adet “SAS Veritabanı” var. Uygulama ilk oluşturulanı kullanıyor. Fazla kopyalar yanlışlıkla oluşmuştur; Drive’da inceleyip gereksiz olanları silebilirsiniz.</p>}
+        {mod === 'google' && dbId && <div className="flex gap-2 mt-3 flex-wrap"><a className="btn" href={`https://docs.google.com/spreadsheets/d/${dbId}`} target="_blank" rel="noreferrer">Veritabanını Drive’da aç</a><button className="btn" onClick={() => void yenidenYukle('Veriler Drive’dan yeniden okundu.')}>Drive’dan yeniden oku</button></div>}
+      </Kart>
       <Kart>
         <Baslik>Hesap ve Drive klasörü</Baslik>
         <p className="text-[15px]">{mod === 'demo' ? 'Demo modu (sahte veri)' : <>Giriş: <b>{email}</b></>}</p>

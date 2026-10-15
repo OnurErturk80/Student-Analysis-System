@@ -9,9 +9,10 @@ export const DB_ADI = 'SAS Veritabanı'
 const TABLAR = Object.keys(SEKMELER) as TabAdi[]
 const sutunHarf = (n: number) => { let s = ''; for (n++; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s; return s }
 
-export async function dbBul(klasorId: string): Promise<string | null> {
+/** Klasördeki tüm "SAS Veritabanı" dosyaları, en eski önce (ilk oluşturulan asıl veritabanıdır; sonradan çıkan kopyalar yanlışlıkla oluşmuştur) */
+export async function dbBulHepsi(klasorId: string) {
   const l = await listele(`'${klasorId}' in parents and mimeType='${GSHEET}' and name='${DB_ADI}'`)
-  return l[0]?.id ?? null
+  return l.sort((a, b) => (a.createdTime ?? '').localeCompare(b.createdTime ?? ''))
 }
 export async function dbOlustur(klasorId: string): Promise<string> {
   const r = await gapi<{ spreadsheetId: string }>(S, {
@@ -49,14 +50,15 @@ export async function uzakSurum(id: string): Promise<string> {
   const x = (r.values ?? []).find(v => v[0] === 'surum')
   return x && x[1] !== undefined && x[1] !== null ? String(x[1]) : ''
 }
-const PARCA = 4000
+const PARCA = 2000
 export async function dbKaydet(id: string, db: DB, istenen: TabAdi[] = TABLAR) {
   if ((await uzakSurum(id)) !== (db.surum ?? '')) throw new SurumCakismasi()
   const eskiSurum = db.surum
   db.surum = Math.random().toString(36).slice(2) + Date.now().toString(36)
   // Sıra önemli: sonuç tabloları → işlenen dosyalar → kurallar (sürüm satırı). Yazma yarıda kalırsa dosyalar "işlendi" görünmesin.
-  const ilk = istenen.filter(t => t !== 'kurallar' && t !== 'islenen_dosyalar')
-  const tablar = [...ilk, ...(istenen.includes('islenen_dosyalar') ? ['islenen_dosyalar' as TabAdi] : []), 'kurallar' as TabAdi]
+  // Öğrenciler ve özet tablolar önce, en büyük tablo (kazanım sonuçları) en son: o yazılamasa bile asıl veri kaybolmaz.
+  const SIRA: TabAdi[] = ['ogrenciler', 'sinavlar', 'ders_sonuclari', 'lgs_puanlari', 'kur_gecmisi', 'veli_gorusmeleri', 'kazanim_sonuclari', 'islenen_dosyalar', 'kurallar']
+  const tablar = SIRA.filter(t => t === 'kurallar' || istenen.includes(t))
   try { await yaz(id, db, tablar) } catch (e) { db.surum = eskiSurum; throw e }
 }
 /** Yeni E-Tablo sekmeleri 1000 satırla başlar; values.update bu sınırı aşan yazmayı reddeder. Gerekirse sekmeyi büyütür. */
