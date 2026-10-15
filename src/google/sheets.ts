@@ -9,9 +9,10 @@ export const DB_ADI = 'SAS Veritabanı'
 const TABLAR = Object.keys(SEKMELER) as TabAdi[]
 const sutunHarf = (n: number) => { let s = ''; for (n++; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s; return s }
 
-export async function dbBul(klasorId: string): Promise<string | null> {
+/** Klasördeki tüm "SAS Veritabanı" dosyaları, en eski önce (ilk oluşturulan asıl veritabanıdır; sonradan çıkan kopyalar yanlışlıkla oluşmuştur) */
+export async function dbBulHepsi(klasorId: string) {
   const l = await listele(`'${klasorId}' in parents and mimeType='${GSHEET}' and name='${DB_ADI}'`)
-  return l[0]?.id ?? null
+  return l.sort((a, b) => (a.createdTime ?? '').localeCompare(b.createdTime ?? ''))
 }
 export async function dbOlustur(klasorId: string): Promise<string> {
   const r = await gapi<{ spreadsheetId: string }>(S, {

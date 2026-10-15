@@ -6,7 +6,7 @@ import { kazanimIsle, kurIsle, netIsle, ogrenciListesiIsle } from './analysis/in
 import { demoDB, demoNetEkle, demoPuanEkle, demoYeniHafta } from './data/demo'
 import { CLIENT_ID, cikisYap, eposta, girisYap, kayitliEposta, kayitliOturum, oturumDinle } from './google/auth'
 import { agacDosyalari, indir, klasorAra, klasorBilgi, KLASOR, type DriveDosya } from './google/drive'
-import { dbBul, dbKaydet, dbOlustur, dbYukle, DB_ADI, SurumCakismasi, uzakSurum } from './google/sheets'
+import { dbBulHepsi, dbKaydet, dbOlustur, dbYukle, DB_ADI, SurumCakismasi, uzakSurum } from './google/sheets'
 import { kazanimCoz, okuBuffer, parmakIzi, type Cozum } from './parsers/kazanim'
 import { ogrenciListesiCoz } from './parsers/ogrenciListesi'
 import { pdfOku } from './parsers/pdfYukle'
@@ -49,6 +49,7 @@ interface State {
   hata: string | null
   yuklu: boolean
   sonKontrol: number
+  dbSayisi: number
   oturumGerekli: boolean
   gosterim: Gosterim
   gosterimDegis(g: Gosterim): void
@@ -79,6 +80,7 @@ export const useStore = create<State>((set, get) => ({
   mod: 'giris', asama: { adim: 'giris' }, email: '', db: bosDB(), analiz: null, klasorId: null, dbId: null,
   bekleyenler: [], tarama: null, ilerleme: null, ozet: null, hata: null, yuklu: false,
   sonKontrol: 0,
+  dbSayisi: 0,
   oturumGerekli: false,
   gosterim: guvenli.al('sas.gosterim') === 'net' ? 'net' : 'yuzde',
   gosterimDegis(g) { guvenli.yaz('sas.gosterim', g); set({ gosterim: g }) },
@@ -113,7 +115,9 @@ export const useStore = create<State>((set, get) => ({
     try {
       const bilgi = await klasorBilgi(id)
       if (bilgi.mimeType !== KLASOR) throw new Error('Seçilen öğe bir klasör değil')
-      let dbId = await dbBul(id)
+      const adaylar = await dbBulHepsi(id)
+      let dbId: string | null = adaylar[0]?.id ?? null
+      set({ dbSayisi: adaylar.length })
       let db: DB
       if (!dbId) {
         set({ asama: { adim: 'yukle', mesaj: `"${DB_ADI}" oluşturuluyor…` } })
