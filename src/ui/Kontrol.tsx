@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../store'
 import { Modal } from './bits'
 import { indir } from '../google/drive'
@@ -10,7 +10,9 @@ import type { PdfSonucu } from '../parsers/pdf'
 
 /** "Kontrol bekliyor" listesi + sütun eşleştirme (şablon olarak kaydedilir) */
 export function KontrolListesi({ kapat }: { kapat: () => void }) {
-  const dosyalar = useStore(s => s.db.islenenDosyalar.filter(d => d.durum === 'Kontrol bekliyor'))
+  // Not: seçici her çağrıda yeni dizi döndürürse zustand sonsuz döngüye girer (siyah ekran); süzme seçicinin dışında yapılır
+  const tumu = useStore(s => s.db.islenenDosyalar)
+  const dosyalar = useMemo(() => tumu.filter(d => d.durum === 'Kontrol bekliyor'), [tumu])
   const [acik, setAcik] = useState<string | null>(null)
   if (acik) {
     const pdf = /\.pdf$/i.test(dosyalar.find(d => d.dosyaId === acik)?.ad ?? '')
@@ -22,7 +24,7 @@ export function KontrolListesi({ kapat }: { kapat: () => void }) {
         <ul className="divide-y divide-line">{dosyalar.map(d => (
           <li key={d.dosyaId} className="py-3 flex items-center gap-3">
             <div className="flex-1 min-w-0"><div className="font-medium break-all">{d.ad}</div><div className="text-sm text-down">{d.ayrinti}</div></div>
-            <button className="btn" onClick={() => setAcik(d.dosyaId)}>{/\.pdf$/i.test(d.ad) ? 'Önizle' : 'Sütunları eşleştir'}</button>
+            <div className="flex gap-2 shrink-0"><button className="btn" onClick={() => setAcik(d.dosyaId)}>{/\.pdf$/i.test(d.ad) ? 'Önizle' : 'Sütunları eşleştir'}</button><button className="btn" onClick={() => void useStore.getState().dosyaAtla(d.dosyaId)}>Atla</button></div>
           </li>))}</ul>
       )}
       <p className="text-xs text-muted mt-3">PDF'ler tanınmazsa ya da net değerleri doğru−yanlış/3 ile uyuşmazsa buraya düşer; önizlemede düzeltip onaylayabilirsiniz.</p>

@@ -72,6 +72,7 @@ export default function Ayarlar() {
         <div className="flex gap-2 mt-3 flex-wrap">{mod === 'google' && <button className="btn" onClick={klasoruDegistir}>Drive klasörünü değiştir</button>}{mod === 'google' && <button className="btn" onClick={async () => { await tumunuYenidenIsle(); setYenidenMesaj('Tüm dosyalar yeniden işlenecek: Panel’de Analiz Et’e basın.') }}>Tüm dosyaları yeniden işle</button>}<button className="btn" onClick={cikis}>{mod === 'demo' ? 'Demodan çık' : 'Çıkış yap'}</button></div>
         {yenidenMesaj && <p className="text-sm text-up mt-2" role="status">{yenidenMesaj}</p>}
       </Kart>
+      <p className="text-xs text-muted text-center pb-2">Student Analysis System · sürüm {__SURUM__}{typeof navigator !== 'undefined' && <><br />{navigator.userAgent.replace(/^Mozilla\/5\.0 /, '')}</>}</p>
     </div>
   )
 }
