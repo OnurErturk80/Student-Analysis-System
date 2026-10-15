@@ -47,6 +47,8 @@ Gerçek örnek dosyalarla ayrıştırıcı testi için (dosyalar depoya girmez):
 - *Google penceresinde “Error 400: origin_mismatch”*: Kimlik bilgileri → istemci → “Yetkili JavaScript kaynakları” listesine tam adres eklenmeli: `https://<kullanıcı-adınız>.github.io` (yol ve sondaki `/` olmadan, harf büyüklüğüne dikkat). Giriş ekranındaki hata kutusu tarayıcının kullandığı adresi gösterir.
 - *“Erişim engellendi” / “access_denied”*: OAuth izin ekranında hesabınız **Test kullanıcıları**nda değil.
 - *“Google bu uygulamayı doğrulamadı” uyarısı*: normaldir (uygulama kendi kullanımınız için “Test” durumunda). **Gelişmiş → Student Analysis System’e git (güvenli değil)** deyin; Drive ve E-Tablolar izinlerini onaylayın.
+- *“Request had insufficient authentication scopes” / “Eksik izin”*: Google’ın izin ekranında kutular tek tek işaretlenebilir; Drive ya da E-Tablolar kutusu boş kalmıştır. Uygulama artık bunu girişte algılar ve izni yeniden ister. Hâlâ olursa https://myaccount.google.com/permissions adresinden “Student Analysis System” iznini kaldırıp yeniden giriş yapın ve **tüm kutuları** işaretleyin.
+- *“Drive API / Sheets API etkin değil” (403)*: Google Cloud → API’ler ve Hizmetler → Kitaplık’tan ikisini de etkinleştirin.
 - *Hiç pencere açılmıyor*: tarayıcı açılır pencereyi engelliyordur; adres çubuğundan izin verin.
 
 ### C) Drive klasör yapısı
