@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { demoDB } from '../data/demo'
 import { analizEt, guncelKur } from './engine'
-import { kazanimIsle, netIsle } from './ingest'
+import { kazanimIsle, kurIsle, netIsle } from './ingest'
 
 describe('analiz motoru (demo veri)', () => {
   const db = demoDB()
@@ -45,5 +45,18 @@ describe('analiz motoru (demo veri)', () => {
     kazanimIsle(d, { sinavAd: 'Deneme 2', sinavId: 'DEMO2', tur: 'deneme', tarih: null, sinif: 8, satirlar }, 'xls', '2026-09-30')
     expect(d.dersSonuclari.find(x => x.sinavId === 'DEMO2' && x.ogrenciNo === '214' && x.ders === 'Matematik')!.net).toBe(7.33)
     expect(d.sinavlar.find(s => s.id === 'DEMO2')!.tarih).toBe('2026-09-17') // PDF tarihi korunur
+  })
+  it('kur listesi: değişeni ekler, tekrar çalışınca çift kayıt üretmez, daha yeni elle kaydı ezmez', () => {
+    const d = structuredClone(db)
+    const mevcut = guncelKur(d, '214', 'Matematik')!
+    const hedef = mevcut === 'A' ? 'B' : 'A'
+    const k = { satirlar: [{ ogrenciNo: '214', ogrenciAd: 'x', tur: 'Matematik' as const, kur: hedef }, { ogrenciNo: '99999', ogrenciAd: 'yok', tur: 'Matematik' as const, kur: 'A' }], tarihler: { Matematik: '2026-10-05' }, atlananSatir: 0, sayfaSayisi: 1 }
+    const o1 = kurIsle(d, k, '2026-10-05'); expect(o1.yeni).toBe(1); expect(o1.atlanan).toBe(1)
+    expect(guncelKur(d, '214', 'Matematik')).toBe(hedef)
+    const n = d.kurGecmisi.length
+    const o2 = kurIsle(d, k, '2026-10-05'); expect(o2.yeni).toBe(0); expect(o2.ayni).toBe(1); expect(d.kurGecmisi.length).toBe(n)
+    d.kurGecmisi.push({ id: 'elle', ogrenciNo: '214', tur: 'Matematik', tarih: '2026-10-20', eskiKur: hedef, yeniKur: 'C', neden: 'Elle' })
+    const o3 = kurIsle(d, { ...k, satirlar: [{ ...k.satirlar[0], kur: 'E' }] }, '2026-10-05'); expect(o3.daYeni).toBe(1)
+    expect(guncelKur(d, '214', 'Matematik')).toBe('C')
   })
 })
