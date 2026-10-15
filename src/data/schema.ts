@@ -27,7 +27,7 @@ export function tabloSatirlari(db: DB, tab: TabAdi): Satir[] {
     case 'lgs_puanlari': return db.lgsPuanlari.map(x => [x.sinavId, x.ogrenciNo, x.puan])
     case 'kur_gecmisi': return db.kurGecmisi.map(x => [x.id, x.ogrenciNo, x.tur, x.tarih, x.eskiKur, x.yeniKur, x.neden])
     case 'veli_gorusmeleri': return db.gorusmeler.map(x => [x.id, x.ogrenciNo, x.uyariAnahtar, x.uyariMetni, x.durum, x.tarih, x.not])
-    case 'kurallar': return [['esikler', JSON.stringify(db.ayarlar.esikler)], ['izinliEposta', JSON.stringify(db.ayarlar.izinliEposta)], ['sablonlar', JSON.stringify(db.ayarlar.sablonlar)], ['whatsappSablonu', JSON.stringify(db.ayarlar.whatsappSablonu)]]
+    case 'kurallar': return [['esikler', JSON.stringify(db.ayarlar.esikler)], ['izinliEposta', JSON.stringify(db.ayarlar.izinliEposta)], ['sablonlar', JSON.stringify(db.ayarlar.sablonlar)], ['whatsappSablonu', JSON.stringify(db.ayarlar.whatsappSablonu)], ['surum', db.surum ?? '']]
     case 'islenen_dosyalar': return db.islenenDosyalar.map(x => [x.dosyaId, x.ad, x.sonDegisiklik, x.durum, x.ayrinti, x.sinavId, x.islenmeTarihi])
   }
 }
@@ -47,7 +47,9 @@ export function tabloyuYukle(db: DB, tab: TabAdi, satirlar: unknown[][]) {
     case 'veli_gorusmeleri': db.gorusmeler = r.map(x => ({ id: s(x[0]), ogrenciNo: s(x[1]), uyariAnahtar: s(x[2]), uyariMetni: s(x[3]), durum: s(x[4]) as 'Bekliyor' | 'Görüşüldü', tarih: s(x[5]), not: s(x[6]) })); break
     case 'kurallar': {
       const a: Ayarlar = structuredClone(VARSAYILAN_AYARLAR)
+      db.surum = ''
       for (const x of r) {
+        if (x[0] === 'surum') { db.surum = s(x[1]); continue }
         try {
           const v = JSON.parse(s(x[1]))
           if (x[0] === 'esikler') a.esikler = { ...a.esikler, ...v }

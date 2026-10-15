@@ -63,9 +63,10 @@ export interface DB {
   gorusmeler: Gorusme[]
   ayarlar: Ayarlar
   islenenDosyalar: IslenenDosya[]
+  surum: string // çok cihaz: her kayıtta değişir; başka cihaz yazdıysa çakışma algılanır
 }
 export const bosDB = (): DB => ({
   ogrenciler: [], sinavlar: [], dersSonuclari: [], kazanimSonuclari: [], lgsPuanlari: [], kurGecmisi: [], gorusmeler: [],
-  ayarlar: structuredClone(VARSAYILAN_AYARLAR), islenenDosyalar: [],
+  ayarlar: structuredClone(VARSAYILAN_AYARLAR), islenenDosyalar: [], surum: '',
 })
 export type TabAdi = 'ogrenciler' | 'sinavlar' | 'ders_sonuclari' | 'kazanim_sonuclari' | 'lgs_puanlari' | 'kur_gecmisi' | 'veli_gorusmeleri' | 'kurallar' | 'islenen_dosyalar'

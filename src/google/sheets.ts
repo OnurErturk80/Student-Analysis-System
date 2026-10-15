@@ -42,16 +42,48 @@ export async function dbYukle(id: string): Promise<DB> {
   TABLAR.forEach((t, i) => tabloyuYukle(db, t, r.valueRanges[i].values ?? []))
   return db
 }
+/** Başka bir cihaz veritabanını bizden sonra değiştirdiyse yazma reddedilir (üzerine yazıp veri kaybetmemek için) */
+export class SurumCakismasi extends Error { constructor() { super('Veriler başka bir cihazda değişmiş.') } }
+export async function uzakSurum(id: string): Promise<string> {
+  const r = await gapi<{ values?: unknown[][] }>(`${S}/${id}/values/${encodeURIComponent('kurallar!A2:B30')}?valueRenderOption=UNFORMATTED_VALUE`)
+  const x = (r.values ?? []).find(v => v[0] === 'surum')
+  return x && x[1] !== undefined && x[1] !== null ? String(x[1]) : ''
+}
 const PARCA = 4000
-export async function dbKaydet(id: string, db: DB, tablar: TabAdi[] = TABLAR) {
+export async function dbKaydet(id: string, db: DB, istenen: TabAdi[] = TABLAR) {
+  if ((await uzakSurum(id)) !== (db.surum ?? '')) throw new SurumCakismasi()
+  const eskiSurum = db.surum
+  db.surum = Math.random().toString(36).slice(2) + Date.now().toString(36)
+  // Sıra önemli: sonuç tabloları → işlenen dosyalar → kurallar (sürüm satırı). Yazma yarıda kalırsa dosyalar "işlendi" görünmesin.
+  const ilk = istenen.filter(t => t !== 'kurallar' && t !== 'islenen_dosyalar')
+  const tablar = [...ilk, ...(istenen.includes('islenen_dosyalar') ? ['islenen_dosyalar' as TabAdi] : []), 'kurallar' as TabAdi]
+  try { await yaz(id, db, tablar) } catch (e) { db.surum = eskiSurum; throw e }
+}
+/** Yeni E-Tablo sekmeleri 1000 satırla başlar; values.update bu sınırı aşan yazmayı reddeder. Gerekirse sekmeyi büyütür. */
+async function gridiBuyut(id: string, gerekli: { tab: TabAdi; satir: number; sutun: number }[]) {
+  const m = await gapi<{ sheets?: { properties: { sheetId: number; title: string; gridProperties?: { rowCount?: number; columnCount?: number } } }[] }>(
+    `${S}/${id}?fields=sheets.properties(sheetId,title,gridProperties(rowCount,columnCount))`)
+  const istekler: object[] = []
+  for (const g of gerekli) {
+    const p = m.sheets?.find(x => x.properties.title === g.tab)?.properties
+    if (!p) continue
+    const satir = p.gridProperties?.rowCount ?? 1000, sutun = p.gridProperties?.columnCount ?? 26
+    if (satir < g.satir || sutun < g.sutun)
+      istekler.push({ updateSheetProperties: { properties: { sheetId: p.sheetId, gridProperties: { rowCount: Math.max(satir, g.satir + 500), columnCount: Math.max(sutun, g.sutun) } }, fields: 'gridProperties.rowCount,gridProperties.columnCount' } })
+  }
+  if (istekler.length) await gapi(`${S}/${id}:batchUpdate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requests: istekler }) })
+}
+async function yaz(id: string, db: DB, tablar: TabAdi[]) {
+  const satirlar = new Map(tablar.map(t => [t, tabloSatirlari(db, t)] as const))
+  await gridiBuyut(id, tablar.map(t => ({ tab: t, satir: satirlar.get(t)!.length + 2, sutun: SEKMELER[t].length })))
   for (const t of tablar) {
-    const son = sutunHarf(SEKMELER[t].length - 1)
-    await gapi(`${S}/${id}/values/${encodeURIComponent(`${t}!A2:${son}`)}:clear`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-    const satirlar = tabloSatirlari(db, t)
-    for (let i = 0; i < satirlar.length; i += PARCA) {
+    const son = sutunHarf(SEKMELER[t].length - 1), s = satirlar.get(t)!
+    // önce yeni veri yazılır, sonra artakalan eski satırlar silinir: yazma yarıda kalırsa tablo boşalmaz
+    for (let i = 0; i < s.length; i += PARCA) {
       await gapi(`${S}/${id}/values/${encodeURIComponent(`${t}!A${i + 2}`)}?valueInputOption=RAW`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ values: satirlar.slice(i, i + PARCA) }),
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ values: s.slice(i, i + PARCA) }),
       })
     }
+    await gapi(`${S}/${id}/values/${encodeURIComponent(`${t}!A${s.length + 2}:${son}`)}:clear`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
   }
 }

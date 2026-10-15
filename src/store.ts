@@ -4,9 +4,9 @@ import { bosDB } from './types'
 import { analizEt, guncelKur, type Analiz, type Gosterim } from './analysis/engine'
 import { kazanimIsle, kurIsle, netIsle, ogrenciListesiIsle } from './analysis/ingest'
 import { demoDB, demoNetEkle, demoPuanEkle, demoYeniHafta } from './data/demo'
-import { CLIENT_ID, cikisYap, eposta, girisYap } from './google/auth'
+import { CLIENT_ID, cikisYap, eposta, girisYap, kayitliEposta, kayitliOturum, oturumDinle } from './google/auth'
 import { agacDosyalari, indir, klasorAra, klasorBilgi, KLASOR, type DriveDosya } from './google/drive'
-import { dbBul, dbKaydet, dbOlustur, dbYukle, DB_ADI } from './google/sheets'
+import { dbBul, dbKaydet, dbOlustur, dbYukle, DB_ADI, SurumCakismasi, uzakSurum } from './google/sheets'
 import { kazanimCoz, okuBuffer, parmakIzi, type Cozum } from './parsers/kazanim'
 import { ogrenciListesiCoz } from './parsers/ogrenciListesi'
 import { pdfOku } from './parsers/pdfYukle'
@@ -31,6 +31,7 @@ const DESTEK = /\.(xls|xlsx|csv|pdf)$/i
 const PDF = /\.pdf$/i
 const OGR_LISTESI = /[ÖO]ğ?renci\s*Listesi/i
 const yenile = (db: DB) => ({ db: { ...db }, analiz: analizEt(db) })
+const CAKISMA = 'Veriler başka bir cihazda değişmiş; güncel veriler yüklendi. Az önceki işleminizi tekrar yapın.'
 const kimlik = () => Math.random().toString(36).slice(2, 10)
 
 interface State {
@@ -47,6 +48,8 @@ interface State {
   ozet: Ozet | null
   hata: string | null
   yuklu: boolean
+  sonKontrol: number
+  oturumGerekli: boolean
   gosterim: Gosterim
   gosterimDegis(g: Gosterim): void
   // eylemler
@@ -58,6 +61,12 @@ interface State {
   tara(): Promise<void>
   analizEt(): Promise<void>
   kaydet(tablar: TabAdi[]): Promise<void>
+  yenidenYukle(mesaj?: string): Promise<void>
+  tumunuYenidenIsle(): Promise<void>
+  otomatikGiris(): Promise<void>
+  oturumYenile(): Promise<void>
+  hesapDegistir(): Promise<void>
+  yenileGerekirse(): Promise<void>
   gorusmeKaydet(g: Omit<Gorusme, 'id'>): Promise<void>
   kurDegistir(no: string, tur: KurTuru, yeni: string, neden: string): Promise<void>
   ayarKaydet(a: Ayarlar): Promise<void>
@@ -69,6 +78,8 @@ interface State {
 export const useStore = create<State>((set, get) => ({
   mod: 'giris', asama: { adim: 'giris' }, email: '', db: bosDB(), analiz: null, klasorId: null, dbId: null,
   bekleyenler: [], tarama: null, ilerleme: null, ozet: null, hata: null, yuklu: false,
+  sonKontrol: 0,
+  oturumGerekli: false,
   gosterim: guvenli.al('sas.gosterim') === 'net' ? 'net' : 'yuzde',
   gosterimDegis(g) { guvenli.yaz('sas.gosterim', g); set({ gosterim: g }) },
 
@@ -78,15 +89,22 @@ export const useStore = create<State>((set, get) => ({
     void get().tara()
   },
 
+  /** Uygulama açılırken: süresi dolmamış kayıtlı oturum varsa giriş ekranı gösterilmeden devam edilir */
+  async otomatikGiris() { if (CLIENT_ID && kayitliOturum() && !get().yuklu) await get().girisBaslat() },
+  async oturumYenile() {
+    try { await girisYap(); set({ oturumGerekli: false, hata: null }); void get().tara() } catch (e) { set({ hata: (e as Error).message }) }
+  },
+  async hesapDegistir() { cikisYap(); await get().girisBaslat() },
   async girisBaslat() {
     set({ hata: null })
     try {
       if (!CLIENT_ID) throw new Error('Google istemci kimliği tanımlı değil. Kurulum adımları için README\'ye bakın; şimdilik Demo modunu deneyebilirsiniz.')
-      await girisYap()
-      const email = await eposta()
+      const oturum = kayitliOturum()
+      if (!oturum) await girisYap()
+      const email = oturum ? kayitliEposta() : await eposta()
       set({ mod: 'google', email, asama: { adim: 'klasor' } })
-      const kayitli = guvenli.al(KLASOR_ANAHTAR)
-      if (kayitli) await get().klasorSec(kayitli)
+      const klasor = guvenli.al(KLASOR_ANAHTAR)
+      if (klasor) await get().klasorSec(klasor)
     } catch (e) { set({ hata: (e as Error).message, asama: { adim: 'giris' }, mod: 'giris' }) }
   },
 
@@ -113,7 +131,7 @@ export const useStore = create<State>((set, get) => ({
         throw new Error(`${get().email} bu uygulamayı kullanmaya yetkili değil. Ayarlardaki izinli e-posta listesine eklenmeniz gerekir.`)
       }
       guvenli.yaz(KLASOR_ANAHTAR, id)
-      set({ klasorId: id, dbId, ...yenile(db), asama: { adim: 'tamam' }, yuklu: true })
+      set({ klasorId: id, dbId, ...yenile(db), asama: { adim: 'tamam' }, yuklu: true, sonKontrol: Date.now() })
       void get().tara()
     } catch (e) { set({ hata: (e as Error).message, asama: { adim: get().mod === 'google' ? 'klasor' : 'giris' } }) }
   },
@@ -139,8 +157,10 @@ export const useStore = create<State>((set, get) => ({
         const gsheet = f.mimeType === 'application/vnd.google-apps.spreadsheet'
         if (!gsheet && !DESTEK.test(f.name)) { gst(`Atlandı: desteklenmeyen tür (${f.mimeType.replace('application/', '')})`); continue }
         const e = islenen.get(f.id)
-        if (e && e.sonDegisiklik === f.modifiedTime && e.durum !== 'Hata') { gst(e.durum === 'İşlendi' ? 'İşlendi' : e.durum + (e.ayrinti ? `: ${e.ayrinti}` : '')); continue }
-        gst(e ? 'Değişmiş, işlenmeyi bekliyor' : 'Yeni, işlenmeyi bekliyor')
+        // "İşlendi" denmiş ama sonuçları veritabanında yoksa (eski yazma hatası, başka cihaz) dosya yeniden işlenir
+        const eksik = !!e && e.durum === 'İşlendi' && ((e.sinavId !== '' && !(db.sinavlar.some(s => s.id === e.sinavId) && db.dersSonuclari.some(r => r.sinavId === e.sinavId))) || (e.sinavId === '' && OGR_LISTESI.test(e.ad) && db.ogrenciler.length === 0))
+        if (e && !eksik && e.sonDegisiklik === f.modifiedTime && e.durum !== 'Hata') { gst(e.durum === 'İşlendi' ? 'İşlendi' : e.durum + (e.ayrinti ? `: ${e.ayrinti}` : '')); continue }
+        gst(eksik ? 'Veritabanında sonuçları yok, yeniden işlenecek' : e ? 'Değişmiş, işlenmeyi bekliyor' : 'Yeni, işlenmeyi bekliyor')
         bek.push({ id: f.id, ad: f.name, yol: f.yol, mimeType: f.mimeType, modifiedTime: f.modifiedTime, tur: OGR_LISTESI.test(f.name) && f.yol === '' ? 'ogrenciListesi' : 'rapor' })
       }
       set({ tarama: { klasor: klasorSayisi, toplam: dosyalar.length, satirlar, zaman: new Date().toISOString() }, hata: null })
@@ -219,15 +239,45 @@ export const useStore = create<State>((set, get) => ({
     set({ ilerleme: { toplam: bekleyenler.length, biten: bekleyenler.length, ad: 'Kaydediliyor…' } })
     try {
       set({ ...yenile(db) })
-      if (mod === 'google') await dbKaydet(get().dbId!, db, [...dokunulan])
-    } catch (e) { ozet.hata.push('Veritabanına yazılamadı: ' + (e as Error).message) }
+      if (mod === 'google') await dbKaydet(get().dbId!, get().db, [...dokunulan])
+    } catch (e) {
+      if (e instanceof SurumCakismasi) { ozet.hata.push(CAKISMA + ' (Analiz Et’e yeniden basın.)'); set({ ilerleme: null, ozet }); await get().yenidenYukle(CAKISMA); return }
+      ozet.hata.push('Veritabanına yazılamadı: ' + (e as Error).message)
+      set({ hata: 'Sonuçlar Google Drive’a yazılamadı, kapatıp açınca kaybolur: ' + (e as Error).message })
+    }
     set({ ilerleme: null, ozet })
     await get().tara()
   },
 
   async kaydet(tablar) {
     set({ ...yenile(get().db) })
-    if (get().mod === 'google') await dbKaydet(get().dbId!, get().db, tablar)
+    if (get().mod !== 'google') return
+    try { await dbKaydet(get().dbId!, get().db, tablar) } catch (e) {
+      if (e instanceof SurumCakismasi) await get().yenidenYukle(CAKISMA)
+      else { set({ hata: 'Kaydedilemedi: ' + (e as Error).message }); throw e }
+    }
+  },
+  /** İşlenen dosya kayıtlarını siler; sonraki taramada tüm dosyalar yeniden işlenir */
+  async tumunuYenidenIsle() {
+    get().db.islenenDosyalar = []
+    await get().kaydet(['islenen_dosyalar'])
+    await get().tara()
+  },
+  /** Veritabanını Drive'dan yeniden okur (başka cihazda değişiklik yapılmışsa) */
+  async yenidenYukle(mesaj) {
+    const { dbId } = get(); if (!dbId) return
+    try {
+      const db = await dbYukle(dbId)
+      set({ ...yenile(db), hata: mesaj ?? null, sonKontrol: Date.now() })
+      void get().tara()
+    } catch (e) { set({ hata: 'Veriler yenilenemedi: ' + (e as Error).message }) }
+  },
+  /** Uygulamaya dönüldüğünde: başka cihaz yazdıysa sessizce güncelle */
+  async yenileGerekirse() {
+    const { mod, dbId, ilerleme, db, sonKontrol } = get()
+    if (mod !== 'google' || !dbId || ilerleme || Date.now() - sonKontrol < 20_000) return
+    set({ sonKontrol: Date.now() })
+    try { if ((await uzakSurum(dbId)) !== db.surum) await get().yenidenYukle() } catch { /* çevrimdışı olabilir */ }
   },
   async gorusmeKaydet(g) {
     const db = get().db
@@ -269,3 +319,4 @@ export const useStore = create<State>((set, get) => ({
 }))
 export { klasorAra, parmakIzi }
 export type { Cozum }
+oturumDinle(() => useStore.setState({ oturumGerekli: true }))

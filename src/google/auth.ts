@@ -6,11 +6,28 @@ export const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
 ].join(' ')
 
-interface TokenClient { requestAccessToken(o?: { prompt?: string }): void }
+interface TokenClient { requestAccessToken(o?: { prompt?: string; hint?: string }): void }
 interface TokenYaniti { access_token?: string; expires_in?: number; error?: string; error_description?: string; scope?: string }
 declare global { interface Window { google?: { accounts: { oauth2: { initTokenClient(c: object): TokenClient; revoke(t: string, cb: () => void): void; hasGrantedAllScopes(r: TokenYaniti, ...s: string[]): boolean } } } } }
 
-let token: { value: string; exp: number } | null = null
+const JETON = 'sas.jeton', EPOSTA = 'sas.eposta'
+const depo = {
+  al: (k: string) => { try { return localStorage.getItem(k) } catch { return null } },
+  yaz: (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { /* özel pencere vb. */ } },
+  sil: (k: string) => { try { localStorage.removeItem(k) } catch { /* */ } },
+}
+// Erişim jetonu 1 saat geçerlidir; sayfa/uygulama yeniden açılınca süresi dolmadıysa tekrar giriş gerekmesin diye saklanır.
+function kayitliJeton(): { value: string; exp: number } | null {
+  try { const j = JSON.parse(depo.al(JETON) ?? 'null'); return j && typeof j.value === 'string' && j.exp - Date.now() > 120_000 ? j : null } catch { return null }
+}
+export const kayitliEposta = () => depo.al(EPOSTA) ?? ''
+/** Süresi dolmamış kayıtlı oturum var mı (açılışta giriş ekranı atlanır) */
+export const kayitliOturum = () => !!kayitliJeton() && !!kayitliEposta()
+let oturumDinleyici: (() => void) | null = null
+/** Sessiz yenileme başarısız olursa (ör. iOS açılır pencereyi engeller) arayüzü haberdar eder */
+export const oturumDinle = (f: () => void) => { oturumDinleyici = f }
+
+let token: { value: string; exp: number } | null = kayitliJeton()
 let client: TokenClient | null = null
 let bekleyen: { ok: (t: string) => void; hata: (e: Error) => void } | null = null
 let zorlaOnay = false // eksik izin verilirse sonraki girişte izin ekranı yeniden zorlanır
@@ -44,7 +61,7 @@ async function hazirla() {
         zorlaOnay = true
         window.google!.accounts.oauth2.revoke(r.access_token, () => {})
         bekleyen?.hata(new Error(EKSIK_IZIN))
-      } else { zorlaOnay = false; token = { value: r.access_token, exp: Date.now() + (r.expires_in ?? 3600) * 1000 }; bekleyen?.ok(r.access_token) }
+      } else { zorlaOnay = false; token = { value: r.access_token, exp: Date.now() + (r.expires_in ?? 3600) * 1000 }; depo.yaz(JETON, JSON.stringify(token)); bekleyen?.ok(r.access_token) }
       bekleyen = null
     },
     error_callback: (e: { type?: string; message?: string }) => { bekleyen?.hata(new Error(e.type === 'popup_closed' ? 'Giriş penceresi kapatıldı' : e.type === 'popup_failed_to_open' ? 'Tarayıcı giriş penceresini engelledi. Adres çubuğundaki “açılır pencere engellendi” bildiriminden izin verip tekrar deneyin.' : `Giriş penceresi açılamadı (${e.type ?? e.message ?? 'bilinmeyen'})`)); bekleyen = null },
@@ -53,20 +70,24 @@ async function hazirla() {
 }
 export async function girisYap(): Promise<string> {
   const c = await hazirla()
-  return new Promise((ok, hata) => { bekleyen = { ok, hata }; c.requestAccessToken({ prompt: zorlaOnay ? 'consent' : token ? '' : 'select_account' }) })
+  return new Promise((ok, hata) => { bekleyen = { ok, hata }; c.requestAccessToken({ prompt: zorlaOnay ? 'consent' : kayitliEposta() ? '' : 'select_account', ...(kayitliEposta() ? { hint: kayitliEposta() } : {}) }) })
 }
 /** Geçerli erişim jetonu; süresi dolmuşsa sessizce yenilemeyi dener. */
 export async function jeton(): Promise<string> {
   if (token && token.exp - Date.now() > 60_000) return token.value
-  const c = await hazirla()
-  return new Promise((ok, hata) => { bekleyen = { ok, hata }; c.requestAccessToken({ prompt: '' }) })
+  try {
+    const c = await hazirla()
+    return await new Promise<string>((ok, hata) => { bekleyen = { ok, hata }; c.requestAccessToken({ prompt: '', ...(kayitliEposta() ? { hint: kayitliEposta() } : {}) }) })
+  } catch (e) { oturumDinleyici?.(); throw e }
 }
-export function cikisYap() {
+export function cikisYap(hesapuUnut = true) {
   if (token) window.google?.accounts.oauth2.revoke(token.value, () => {})
-  token = null
+  token = null; depo.sil(JETON); if (hesapuUnut) depo.sil(EPOSTA)
 }
 export async function eposta(): Promise<string> {
   const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: `Bearer ${await jeton()}` } })
   if (!r.ok) throw new Error('Kullanıcı bilgisi alınamadı')
-  return (await r.json()).email as string
+  const e = (await r.json()).email as string
+  depo.yaz(EPOSTA, e)
+  return e
 }
