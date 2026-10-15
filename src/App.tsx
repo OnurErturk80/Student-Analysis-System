@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import { useStore } from './store'
 import Layout from './ui/Layout'
@@ -14,6 +15,11 @@ import Lgs from './pages/Lgs'
 
 export default function App() {
   const yuklu = useStore(s => s.yuklu)
+  useEffect(() => {
+    const don = () => { if (document.visibilityState === 'visible') void useStore.getState().yenileGerekirse() }
+    document.addEventListener('visibilitychange', don); window.addEventListener('focus', don)
+    return () => { document.removeEventListener('visibilitychange', don); window.removeEventListener('focus', don) }
+  }, [])
   if (!yuklu) return <Giris />
   return (
     <HashRouter>

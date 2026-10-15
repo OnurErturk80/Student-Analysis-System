@@ -55,12 +55,11 @@ export function OzetDialog() {
 
 /** Klasör taramasının ne bulduğunu gösterir: dosya gelmiyorsa nedenini görmek için */
 export function TaramaBilgisi() {
-  const { tarama, mod, hata } = useStore()
+  const { tarama, mod } = useStore()
   const [ac, setAc] = useState(false)
   if (mod !== 'google') return null
   return (
     <>
-      {hata && <div role="alert" className="rounded-xl bg-warn border border-warnline text-down px-3 py-2 text-sm flex gap-2"><span className="flex-1">{hata}</span><button className="font-semibold" onClick={() => useStore.setState({ hata: null })} aria-label="Kapat">✕</button></div>}
       {tarama && (
         <div className="flex items-center gap-2 text-sm text-muted px-1">
           <span className="flex-1">{tarama.toplam === 0 ? <b className="text-down">Seçili klasörde hiç dosya görünmüyor.</b> : <>Klasör taraması: <b className="text-ink">{tarama.toplam}</b> dosya, {tarama.klasor} klasör.</>}</span>

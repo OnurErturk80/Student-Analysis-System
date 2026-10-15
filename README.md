@@ -51,6 +51,12 @@ Gerçek örnek dosyalarla ayrıştırıcı testi için (dosyalar depoya girmez):
 - *“Drive API / Sheets API etkin değil” (403)*: Google Cloud → API’ler ve Hizmetler → Kitaplık’tan ikisini de etkinleştirin.
 - *Hiç pencere açılmıyor*: tarayıcı açılır pencereyi engelliyordur; adres çubuğundan izin verin.
 
+### Birden çok cihaz (Mac + iPhone + iPad)
+- Veriler tek bir yerde, Drive’daki “SAS Veritabanı”nda durur; her cihaz oradan okur. Cihazlar arasında elle bir şey yapmanız gerekmez.
+- Her kayıtta veritabanına bir **sürüm** yazılır. Bir cihaz kaydetmeye çalışırken Drive’daki sürüm kendi okuduğundan farklıysa (başka cihaz değişiklik yapmıştır) **üzerine yazmaz**; güncel veriyi yükler ve işlemi tekrar yapmanızı ister. Uygulamaya geri dönüldüğünde de sürüm kontrol edilip gerekirse veriler sessizce yenilenir.
+- Drive klasör seçimi her cihazın kendi tarayıcısında hatırlanır; yeni cihazda klasörü bir kez seçin (aynı “Student Analysis System” klasörünü).
+- **iPhone/iPad notu:** Google girişi, ana ekrana eklenmiş uygulamada (tam ekran) bazen açılır pencere yüzünden başarısız olabilir. Giriş sorun çıkarırsa önce Safari’de (normal sekmede) giriş yapın.
+
 ### C) Drive klasör yapısı
 ```
 Student Analysis System/

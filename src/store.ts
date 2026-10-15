@@ -6,7 +6,7 @@ import { kazanimIsle, kurIsle, netIsle, ogrenciListesiIsle } from './analysis/in
 import { demoDB, demoNetEkle, demoPuanEkle, demoYeniHafta } from './data/demo'
 import { CLIENT_ID, cikisYap, eposta, girisYap } from './google/auth'
 import { agacDosyalari, indir, klasorAra, klasorBilgi, KLASOR, type DriveDosya } from './google/drive'
-import { dbBul, dbKaydet, dbOlustur, dbYukle, DB_ADI } from './google/sheets'
+import { dbBul, dbKaydet, dbOlustur, dbYukle, DB_ADI, SurumCakismasi, uzakSurum } from './google/sheets'
 import { kazanimCoz, okuBuffer, parmakIzi, type Cozum } from './parsers/kazanim'
 import { ogrenciListesiCoz } from './parsers/ogrenciListesi'
 import { pdfOku } from './parsers/pdfYukle'
@@ -31,6 +31,7 @@ const DESTEK = /\.(xls|xlsx|csv|pdf)$/i
 const PDF = /\.pdf$/i
 const OGR_LISTESI = /[ÖO]ğ?renci\s*Listesi/i
 const yenile = (db: DB) => ({ db: { ...db }, analiz: analizEt(db) })
+const CAKISMA = 'Veriler başka bir cihazda değişmiş; güncel veriler yüklendi. Az önceki işleminizi tekrar yapın.'
 const kimlik = () => Math.random().toString(36).slice(2, 10)
 
 interface State {
@@ -47,6 +48,7 @@ interface State {
   ozet: Ozet | null
   hata: string | null
   yuklu: boolean
+  sonKontrol: number
   gosterim: Gosterim
   gosterimDegis(g: Gosterim): void
   // eylemler
@@ -58,6 +60,8 @@ interface State {
   tara(): Promise<void>
   analizEt(): Promise<void>
   kaydet(tablar: TabAdi[]): Promise<void>
+  yenidenYukle(mesaj?: string): Promise<void>
+  yenileGerekirse(): Promise<void>
   gorusmeKaydet(g: Omit<Gorusme, 'id'>): Promise<void>
   kurDegistir(no: string, tur: KurTuru, yeni: string, neden: string): Promise<void>
   ayarKaydet(a: Ayarlar): Promise<void>
@@ -69,6 +73,7 @@ interface State {
 export const useStore = create<State>((set, get) => ({
   mod: 'giris', asama: { adim: 'giris' }, email: '', db: bosDB(), analiz: null, klasorId: null, dbId: null,
   bekleyenler: [], tarama: null, ilerleme: null, ozet: null, hata: null, yuklu: false,
+  sonKontrol: 0,
   gosterim: guvenli.al('sas.gosterim') === 'net' ? 'net' : 'yuzde',
   gosterimDegis(g) { guvenli.yaz('sas.gosterim', g); set({ gosterim: g }) },
 
@@ -113,7 +118,7 @@ export const useStore = create<State>((set, get) => ({
         throw new Error(`${get().email} bu uygulamayı kullanmaya yetkili değil. Ayarlardaki izinli e-posta listesine eklenmeniz gerekir.`)
       }
       guvenli.yaz(KLASOR_ANAHTAR, id)
-      set({ klasorId: id, dbId, ...yenile(db), asama: { adim: 'tamam' }, yuklu: true })
+      set({ klasorId: id, dbId, ...yenile(db), asama: { adim: 'tamam' }, yuklu: true, sonKontrol: Date.now() })
       void get().tara()
     } catch (e) { set({ hata: (e as Error).message, asama: { adim: get().mod === 'google' ? 'klasor' : 'giris' } }) }
   },
@@ -219,15 +224,38 @@ export const useStore = create<State>((set, get) => ({
     set({ ilerleme: { toplam: bekleyenler.length, biten: bekleyenler.length, ad: 'Kaydediliyor…' } })
     try {
       set({ ...yenile(db) })
-      if (mod === 'google') await dbKaydet(get().dbId!, db, [...dokunulan])
-    } catch (e) { ozet.hata.push('Veritabanına yazılamadı: ' + (e as Error).message) }
+      if (mod === 'google') await dbKaydet(get().dbId!, get().db, [...dokunulan])
+    } catch (e) {
+      if (e instanceof SurumCakismasi) { ozet.hata.push(CAKISMA + ' (Analiz Et’e yeniden basın.)'); set({ ilerleme: null, ozet }); await get().yenidenYukle(CAKISMA); return }
+      ozet.hata.push('Veritabanına yazılamadı: ' + (e as Error).message)
+    }
     set({ ilerleme: null, ozet })
     await get().tara()
   },
 
   async kaydet(tablar) {
     set({ ...yenile(get().db) })
-    if (get().mod === 'google') await dbKaydet(get().dbId!, get().db, tablar)
+    if (get().mod !== 'google') return
+    try { await dbKaydet(get().dbId!, get().db, tablar) } catch (e) {
+      if (e instanceof SurumCakismasi) await get().yenidenYukle(CAKISMA)
+      else { set({ hata: 'Kaydedilemedi: ' + (e as Error).message }); throw e }
+    }
+  },
+  /** Veritabanını Drive'dan yeniden okur (başka cihazda değişiklik yapılmışsa) */
+  async yenidenYukle(mesaj) {
+    const { dbId } = get(); if (!dbId) return
+    try {
+      const db = await dbYukle(dbId)
+      set({ ...yenile(db), hata: mesaj ?? null, sonKontrol: Date.now() })
+      void get().tara()
+    } catch (e) { set({ hata: 'Veriler yenilenemedi: ' + (e as Error).message }) }
+  },
+  /** Uygulamaya dönüldüğünde: başka cihaz yazdıysa sessizce güncelle */
+  async yenileGerekirse() {
+    const { mod, dbId, ilerleme, db, sonKontrol } = get()
+    if (mod !== 'google' || !dbId || ilerleme || Date.now() - sonKontrol < 20_000) return
+    set({ sonKontrol: Date.now() })
+    try { if ((await uzakSurum(dbId)) !== db.surum) await get().yenidenYukle() } catch { /* çevrimdışı olabilir */ }
   },
   async gorusmeKaydet(g) {
     const db = get().db
