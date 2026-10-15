@@ -4,7 +4,7 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import { useStore } from '../store'
 import { Avatar, Baslik, Bos, Delta, Kart } from '../ui/bits'
 import { Icon } from '../ui/Icon'
-import { AnalizBandi, OzetDialog } from '../ui/AnalizEt'
+import { AnalizBandi, OzetDialog, TaramaBilgisi } from '../ui/AnalizEt'
 import { KontrolListesi } from '../ui/Kontrol'
 import { DERSLER } from '../types'
 import { GENEL, degisim, degerOf, type Nokta } from '../analysis/engine'
@@ -64,6 +64,7 @@ export default function Panel() {
         <div className="flex items-center gap-2"><GosterimSecici /><Link to="/ayarlar" className="btn rounded-full w-11 !px-0" aria-label="Ayarlar"><Icon n="gear" size={20} /></Link></div>
       </header>
       <AnalizBandi />
+      <TaramaBilgisi />
       {db.sinavlar.length === 0 ? <Kart><Bos>Henüz sınav verisi yok. Drive klasörünüzdeki dosyaları işlemek için “Analiz Et”e basın.</Bos></Kart> : (<>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Kart><div className="text-sm text-muted">{g === 'net' ? 'Genel net' : 'Genel başarı'}</div><div className="text-[30px] font-extrabold tabular-nums">{v.gSon === null ? '–' : g === 'net' ? <>{netYaz(v.gSon)}<span className="text-base font-semibold text-muted"> / {v.genelMax}</span></> : yuzdeYaz(v.gSon, 1)}</div>
