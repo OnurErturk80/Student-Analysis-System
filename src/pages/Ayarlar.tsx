@@ -15,7 +15,8 @@ const ALANLAR: { k: SayiAnahtar; ad: string; ek: string }[] = [
   { k: 'lidepSinav', ad: 'LGS tahmini: son kaç deneme', ek: 'deneme' },
 ]
 export default function Ayarlar() {
-  const { db, ayarKaydet, mod, email, klasoruDegistir, cikis } = useStore()
+  const { db, ayarKaydet, mod, email, klasoruDegistir, cikis, tumunuYenidenIsle } = useStore()
+  const [yenidenMesaj, setYenidenMesaj] = useState('')
   const [e, setE] = useState<Esikler>({ ...db.ayarlar.esikler })
   const [wa, setWa] = useState(db.ayarlar.whatsappSablonu)
   const [mailler, setMailler] = useState(db.ayarlar.izinliEposta.join('\n'))
@@ -58,7 +59,8 @@ export default function Ayarlar() {
         <Baslik>Hesap ve Drive klasörü</Baslik>
         <p className="text-[15px]">{mod === 'demo' ? 'Demo modu (sahte veri)' : <>Giriş: <b>{email}</b></>}</p>
         <p className="text-sm text-muted mt-1">Kayıtlı sütun şablonu: {db.ayarlar.sablonlar.length} · Sınav: {db.sinavlar.length} · Öğrenci: {db.ogrenciler.filter(o => o.aktif).length}</p>
-        <div className="flex gap-2 mt-3 flex-wrap">{mod === 'google' && <button className="btn" onClick={klasoruDegistir}>Drive klasörünü değiştir</button>}<button className="btn" onClick={cikis}>{mod === 'demo' ? 'Demodan çık' : 'Çıkış yap'}</button></div>
+        <div className="flex gap-2 mt-3 flex-wrap">{mod === 'google' && <button className="btn" onClick={klasoruDegistir}>Drive klasörünü değiştir</button>}{mod === 'google' && <button className="btn" onClick={async () => { await tumunuYenidenIsle(); setYenidenMesaj('Tüm dosyalar yeniden işlenecek: Panel’de Analiz Et’e basın.') }}>Tüm dosyaları yeniden işle</button>}<button className="btn" onClick={cikis}>{mod === 'demo' ? 'Demodan çık' : 'Çıkış yap'}</button></div>
+        {yenidenMesaj && <p className="text-sm text-up mt-2" role="status">{yenidenMesaj}</p>}
       </Kart>
     </div>
   )

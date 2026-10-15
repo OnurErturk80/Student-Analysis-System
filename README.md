@@ -54,6 +54,8 @@ Gerçek örnek dosyalarla ayrıştırıcı testi için (dosyalar depoya girmez):
 ### Birden çok cihaz (Mac + iPhone + iPad)
 - Veriler tek bir yerde, Drive’daki “SAS Veritabanı”nda durur; her cihaz oradan okur. Cihazlar arasında elle bir şey yapmanız gerekmez.
 - Her kayıtta veritabanına bir **sürüm** yazılır. Bir cihaz kaydetmeye çalışırken Drive’daki sürüm kendi okuduğundan farklıysa (başka cihaz değişiklik yapmıştır) **üzerine yazmaz**; güncel veriyi yükler ve işlemi tekrar yapmanızı ister. Uygulamaya geri dönüldüğünde de sürüm kontrol edilip gerekirse veriler sessizce yenilenir.
+- **Oturum:** Google, sunucusuz uygulamalara 1 saatlik erişim verir. Süre dolmadan uygulamayı yeniden açarsanız giriş ekranı atlanır; süre dolduysa tek dokunuşla “Devam et” yeterlidir (hesap seçmeniz gerekmez). Kullanırken süre dolarsa “Yeniden bağlan” düğmesi çıkar. Ortak bir cihazda işiniz bitince **Çıkış yap** deyin (kayıtlı oturum silinir).
+- **Veri Drive’a yazılamazsa** (ağ, kota vb.) artık kırmızı bir uyarı çıkar ve dosya “işlendi” sayılmaz. Daha önce “işlendi” denip sonuçları veritabanında bulunmayan dosyalar otomatik yeniden işlenir. Ayarlar → **Tüm dosyaları yeniden işle** ile hepsini elle de yeniden işletebilirsiniz.
 - Drive klasör seçimi her cihazın kendi tarayıcısında hatırlanır; yeni cihazda klasörü bir kez seçin (aynı “Student Analysis System” klasörünü).
 - **iPhone/iPad notu:** Google girişi, ana ekrana eklenmiş uygulamada (tam ekran) bazen açılır pencere yüzünden başarısız olabilir. Giriş sorun çıkarırsa önce Safari’de (normal sekmede) giriş yapın.
 

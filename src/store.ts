@@ -4,7 +4,7 @@ import { bosDB } from './types'
 import { analizEt, guncelKur, type Analiz, type Gosterim } from './analysis/engine'
 import { kazanimIsle, kurIsle, netIsle, ogrenciListesiIsle } from './analysis/ingest'
 import { demoDB, demoNetEkle, demoPuanEkle, demoYeniHafta } from './data/demo'
-import { CLIENT_ID, cikisYap, eposta, girisYap } from './google/auth'
+import { CLIENT_ID, cikisYap, eposta, girisYap, kayitliEposta, kayitliOturum, oturumDinle } from './google/auth'
 import { agacDosyalari, indir, klasorAra, klasorBilgi, KLASOR, type DriveDosya } from './google/drive'
 import { dbBul, dbKaydet, dbOlustur, dbYukle, DB_ADI, SurumCakismasi, uzakSurum } from './google/sheets'
 import { kazanimCoz, okuBuffer, parmakIzi, type Cozum } from './parsers/kazanim'
@@ -49,6 +49,7 @@ interface State {
   hata: string | null
   yuklu: boolean
   sonKontrol: number
+  oturumGerekli: boolean
   gosterim: Gosterim
   gosterimDegis(g: Gosterim): void
   // eylemler
@@ -61,6 +62,10 @@ interface State {
   analizEt(): Promise<void>
   kaydet(tablar: TabAdi[]): Promise<void>
   yenidenYukle(mesaj?: string): Promise<void>
+  tumunuYenidenIsle(): Promise<void>
+  otomatikGiris(): Promise<void>
+  oturumYenile(): Promise<void>
+  hesapDegistir(): Promise<void>
   yenileGerekirse(): Promise<void>
   gorusmeKaydet(g: Omit<Gorusme, 'id'>): Promise<void>
   kurDegistir(no: string, tur: KurTuru, yeni: string, neden: string): Promise<void>
@@ -74,6 +79,7 @@ export const useStore = create<State>((set, get) => ({
   mod: 'giris', asama: { adim: 'giris' }, email: '', db: bosDB(), analiz: null, klasorId: null, dbId: null,
   bekleyenler: [], tarama: null, ilerleme: null, ozet: null, hata: null, yuklu: false,
   sonKontrol: 0,
+  oturumGerekli: false,
   gosterim: guvenli.al('sas.gosterim') === 'net' ? 'net' : 'yuzde',
   gosterimDegis(g) { guvenli.yaz('sas.gosterim', g); set({ gosterim: g }) },
 
@@ -83,15 +89,22 @@ export const useStore = create<State>((set, get) => ({
     void get().tara()
   },
 
+  /** Uygulama açılırken: süresi dolmamış kayıtlı oturum varsa giriş ekranı gösterilmeden devam edilir */
+  async otomatikGiris() { if (CLIENT_ID && kayitliOturum() && !get().yuklu) await get().girisBaslat() },
+  async oturumYenile() {
+    try { await girisYap(); set({ oturumGerekli: false, hata: null }); void get().tara() } catch (e) { set({ hata: (e as Error).message }) }
+  },
+  async hesapDegistir() { cikisYap(); await get().girisBaslat() },
   async girisBaslat() {
     set({ hata: null })
     try {
       if (!CLIENT_ID) throw new Error('Google istemci kimliği tanımlı değil. Kurulum adımları için README\'ye bakın; şimdilik Demo modunu deneyebilirsiniz.')
-      await girisYap()
-      const email = await eposta()
+      const oturum = kayitliOturum()
+      if (!oturum) await girisYap()
+      const email = oturum ? kayitliEposta() : await eposta()
       set({ mod: 'google', email, asama: { adim: 'klasor' } })
-      const kayitli = guvenli.al(KLASOR_ANAHTAR)
-      if (kayitli) await get().klasorSec(kayitli)
+      const klasor = guvenli.al(KLASOR_ANAHTAR)
+      if (klasor) await get().klasorSec(klasor)
     } catch (e) { set({ hata: (e as Error).message, asama: { adim: 'giris' }, mod: 'giris' }) }
   },
 
@@ -144,8 +157,10 @@ export const useStore = create<State>((set, get) => ({
         const gsheet = f.mimeType === 'application/vnd.google-apps.spreadsheet'
         if (!gsheet && !DESTEK.test(f.name)) { gst(`Atlandı: desteklenmeyen tür (${f.mimeType.replace('application/', '')})`); continue }
         const e = islenen.get(f.id)
-        if (e && e.sonDegisiklik === f.modifiedTime && e.durum !== 'Hata') { gst(e.durum === 'İşlendi' ? 'İşlendi' : e.durum + (e.ayrinti ? `: ${e.ayrinti}` : '')); continue }
-        gst(e ? 'Değişmiş, işlenmeyi bekliyor' : 'Yeni, işlenmeyi bekliyor')
+        // "İşlendi" denmiş ama sonuçları veritabanında yoksa (eski yazma hatası, başka cihaz) dosya yeniden işlenir
+        const eksik = !!e && e.durum === 'İşlendi' && ((e.sinavId !== '' && !(db.sinavlar.some(s => s.id === e.sinavId) && db.dersSonuclari.some(r => r.sinavId === e.sinavId))) || (e.sinavId === '' && OGR_LISTESI.test(e.ad) && db.ogrenciler.length === 0))
+        if (e && !eksik && e.sonDegisiklik === f.modifiedTime && e.durum !== 'Hata') { gst(e.durum === 'İşlendi' ? 'İşlendi' : e.durum + (e.ayrinti ? `: ${e.ayrinti}` : '')); continue }
+        gst(eksik ? 'Veritabanında sonuçları yok, yeniden işlenecek' : e ? 'Değişmiş, işlenmeyi bekliyor' : 'Yeni, işlenmeyi bekliyor')
         bek.push({ id: f.id, ad: f.name, yol: f.yol, mimeType: f.mimeType, modifiedTime: f.modifiedTime, tur: OGR_LISTESI.test(f.name) && f.yol === '' ? 'ogrenciListesi' : 'rapor' })
       }
       set({ tarama: { klasor: klasorSayisi, toplam: dosyalar.length, satirlar, zaman: new Date().toISOString() }, hata: null })
@@ -228,6 +243,7 @@ export const useStore = create<State>((set, get) => ({
     } catch (e) {
       if (e instanceof SurumCakismasi) { ozet.hata.push(CAKISMA + ' (Analiz Et’e yeniden basın.)'); set({ ilerleme: null, ozet }); await get().yenidenYukle(CAKISMA); return }
       ozet.hata.push('Veritabanına yazılamadı: ' + (e as Error).message)
+      set({ hata: 'Sonuçlar Google Drive’a yazılamadı, kapatıp açınca kaybolur: ' + (e as Error).message })
     }
     set({ ilerleme: null, ozet })
     await get().tara()
@@ -240,6 +256,12 @@ export const useStore = create<State>((set, get) => ({
       if (e instanceof SurumCakismasi) await get().yenidenYukle(CAKISMA)
       else { set({ hata: 'Kaydedilemedi: ' + (e as Error).message }); throw e }
     }
+  },
+  /** İşlenen dosya kayıtlarını siler; sonraki taramada tüm dosyalar yeniden işlenir */
+  async tumunuYenidenIsle() {
+    get().db.islenenDosyalar = []
+    await get().kaydet(['islenen_dosyalar'])
+    await get().tara()
   },
   /** Veritabanını Drive'dan yeniden okur (başka cihazda değişiklik yapılmışsa) */
   async yenidenYukle(mesaj) {
@@ -297,3 +319,4 @@ export const useStore = create<State>((set, get) => ({
 }))
 export { klasorAra, parmakIzi }
 export type { Cozum }
+oturumDinle(() => useStore.setState({ oturumGerekli: true }))

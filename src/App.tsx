@@ -15,6 +15,7 @@ import Lgs from './pages/Lgs'
 
 export default function App() {
   const yuklu = useStore(s => s.yuklu)
+  useEffect(() => { void useStore.getState().otomatikGiris() }, [])
   useEffect(() => {
     const don = () => { if (document.visibilityState === 'visible') void useStore.getState().yenileGerekirse() }
     document.addEventListener('visibilitychange', don); window.addEventListener('focus', don)

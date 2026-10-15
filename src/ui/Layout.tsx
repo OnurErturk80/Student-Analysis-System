@@ -21,6 +21,7 @@ export default function Layout() {
   const bekleyen = useStore(s => s.analiz?.uyarilar.length ?? 0)
   const demo = useStore(s => s.mod === 'demo')
   const hata = useStore(s => (s.mod === 'google' ? s.hata : null))
+  const oturumGerekli = useStore(s => s.mod === 'google' && s.oturumGerekli)
   const sozluk = useStore(s => s.db.gorusmeler)
   const bekleyenSayi = useStore(s => s.analiz?.uyarilar.filter(u => !sozluk.some(g => g.ogrenciNo === u.ogrenciNo && g.uyariAnahtar === u.anahtar && g.durum === 'Görüşüldü')).length ?? 0)
   void bekleyen
@@ -42,6 +43,7 @@ export default function Layout() {
       </aside>
       <main className="max-w-[1180px] mx-auto px-4 md:px-8 pt-[max(16px,env(safe-area-inset-top))] pb-28 md:pb-10">
         {demo && <div className="mb-3 rounded-xl bg-soft text-accent text-sm px-3 py-2 font-medium">Demo modu: sahte veri gösteriliyor, hiçbir şey kaydedilmez.</div>}
+        {oturumGerekli && <div role="alert" className="mb-3 rounded-xl bg-soft px-3 py-2 text-sm flex items-center gap-3"><span className="flex-1">Google oturumunun süresi doldu. Devam etmek için yeniden bağlanın.</span><button className="btn btn-primary" onClick={() => void useStore.getState().oturumYenile()}>Yeniden bağlan</button></div>}
         {hata && <div role="alert" className="mb-3 rounded-xl bg-warn border border-warnline text-down px-3 py-2 text-sm flex gap-2"><span className="flex-1">{hata}</span><button className="font-semibold min-w-9" onClick={() => useStore.setState({ hata: null })} aria-label="Kapat">✕</button></div>}
         <Outlet />
       </main>

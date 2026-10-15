@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../store'
 import { altKlasorler, klasorAra, listele, KLASOR, type DriveDosya } from '../google/drive'
-import { CLIENT_ID, girisHazirla } from '../google/auth'
+import { CLIENT_ID, girisHazirla, kayitliEposta } from '../google/auth'
 
 export default function Giris() {
   const { asama, hata, girisBaslat, demoBaslat, mod } = useStore()
@@ -17,8 +17,9 @@ export default function Giris() {
         <div className="mt-2 text-xs text-muted">Google Cloud’da “Yetkili JavaScript kaynakları” listesinde şu adres olmalı: <b className="select-all text-ink">{location.origin}</b></div></div>}
       <button className="btn btn-primary w-full mt-6" onClick={() => void girisBaslat()} disabled={!CLIENT_ID}>
         <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden><path fill="#fff" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37a13 13 0 1 1 8.4-22.9l6-6A21 21 0 1 0 45 24c0-1.3-.2-2.700-.5-4z" /></svg>
-        Google ile giriş yap
+        {kayitliEposta() ? `Devam et · ${kayitliEposta()}` : 'Google ile giriş yap'}
       </button>
+      {kayitliEposta() && <button className="w-full mt-2 min-h-11 text-sm text-accent font-medium" onClick={() => void useStore.getState().hesapDegistir()}>Başka bir Google hesabıyla giriş yap</button>}
       {!CLIENT_ID && <p className="text-xs text-muted mt-2 text-center">Google kimliği henüz tanımlanmadı (README’deki kurulum adımları).</p>}
       <button className="btn w-full mt-3" onClick={demoBaslat}>Demo modunu aç (sahte veri)</button>
       <p className="text-xs text-muted text-center mt-6 leading-relaxed">Veriler yalnızca sizin Google Drive hesabınızda tutulur. Uygulama bir sunucuya veri göndermez.</p>
