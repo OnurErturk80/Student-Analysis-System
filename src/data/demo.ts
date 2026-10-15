@@ -44,6 +44,15 @@ function haftaDosyasi(db: DB, hafta: number, ad: string, tarih: string, r: () =>
   return { sinavAd: ad, sinavId: `DEMO${hafta + 1}`, tur: 'deneme', tarih, sinif: 8, satirlar }
 }
 
+/** Demo: doğru sayısından yanlış dağıtıp net üretir (net = doğru − yanlış/3) */
+export function demoNetEkle(db: DB, sinavId: string, r: () => number) {
+  for (const x of db.dersSonuclari) {
+    if (x.sinavId !== sinavId) continue
+    const dogru = Math.round((x.yuzde / 100) * x.soru)
+    const yanlis = Math.floor(r() * (x.soru - dogru + 1) * 0.7)
+    x.net = Math.round((dogru - yanlis / 3) * 100) / 100
+  }
+}
 export function demoDB(): DB {
   const db = bosDB()
   const r = rng(42)
@@ -71,7 +80,7 @@ export function demoDB(): DB {
     db.kurGecmisi.push({ id: `k-${o.no}-m`, ogrenciNo: o.no, tur: 'Matematik', tarih: '2026-09-07', eskiKur: '', yeniKur: kur, neden: 'Başlangıç' })
     if (o.sinif === 8) db.kurGecmisi.push({ id: `k-${o.no}-l`, ogrenciNo: o.no, tur: 'LİDEP', tarih: '2026-09-07', eskiKur: '', yeniKur: kur, neden: 'Başlangıç' })
   }
-  TARIHLER.forEach((t, h) => kazanimIsle(db, haftaDosyasi(db, h, `Deneme ${h + 1}`, t, r), `demo-${h}`, t))
+  TARIHLER.forEach((t, h) => { kazanimIsle(db, haftaDosyasi(db, h, `Deneme ${h + 1}`, t, r), `demo-${h}`, t); demoNetEkle(db, `DEMO${h + 1}`, r) })
   db.islenenDosyalar = TARIHLER.map((t, h) => ({ dosyaId: `demo-${h}`, ad: `Deneme ${h + 1}.xls`, sonDegisiklik: t, durum: 'İşlendi' as const, ayrinti: '', sinavId: `DEMO${h + 1}`, islenmeTarihi: t }))
   db.ayarlar.izinliEposta = []
   return db

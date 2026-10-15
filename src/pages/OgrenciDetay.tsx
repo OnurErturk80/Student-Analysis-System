@@ -5,7 +5,8 @@ import { useStore } from '../store'
 import { Avatar, Baslik, Bos, Cubuk, Delta, Kart, Modal, Sparkline } from '../ui/bits'
 import { Icon } from '../ui/Icon'
 import { DERSLER, KURLAR, KUR_TURLERI } from '../types'
-import { degisim, guncelKur, subeAnahtari } from '../analysis/engine'
+import { degerOf, degisim, guncelKur, subeAnahtari } from '../analysis/engine'
+import { GosterimSecici, degerYaz, netYaz, useGosterim } from '../ui/gosterim'
 import { yuzdeYaz } from '../lib/tr'
 import { bugun, tarihGuzel } from '../lib/weeks'
 import { whatsappLink } from '../lib/mesaj'
@@ -14,6 +15,7 @@ export default function OgrenciDetay() {
   const { no } = useParams()
   const nav = useNavigate()
   const { db, analiz, kurDegistir, gorusmeKaydet } = useStore()
+  const g = useGosterim()
   const o = db.ogrenciler.find(x => x.no === no)
   const [ders, setDers] = useState<string>('')
   const [not, setNot] = useState(false)
@@ -22,13 +24,13 @@ export default function OgrenciDetay() {
 
   const seri = analiz?.seri.get(no ?? '')
   const uyariDersi = (no && analiz?.uyarilar.find(u => u.ogrenciNo === no && u.ders !== 'Genel')?.ders) || ''
-  const aktifDers = ders || uyariDersi || (o && seri ? [...DERSLER].sort((a, b) => (degisim(seri.get(a)) ?? 0) - (degisim(seri.get(b)) ?? 0)).find(d => seri.get(d)?.length) ?? 'Matematik' : 'Matematik')
+  const aktifDers = ders || uyariDersi || (o && seri ? [...DERSLER].sort((a, b) => (degisim(seri.get(a), g) ?? 0) - (degisim(seri.get(b), g) ?? 0)).find(d => seri.get(d)?.length) ?? 'Matematik' : 'Matematik')
   const grafik = useMemo(() => {
     if (!analiz || !o) return []
     const s = seri?.get(aktifDers) ?? []
     const sube = analiz.subeSeri.get(subeAnahtari(o))?.get(aktifDers) ?? []
-    return analiz.haftalar.map(h => ({ h: 'H' + analiz.haftaNo(h), ogr: s.find(x => x.hafta === h)?.yuzde ?? null, sube: sube.find(x => x.hafta === h)?.yuzde ?? null })).filter(x => x.ogr !== null || x.sube !== null)
-  }, [analiz, o, seri, aktifDers])
+    return analiz.haftalar.map(h => ({ h: 'H' + analiz.haftaNo(h), ogr: degerOf(s.find(x => x.hafta === h), g), sube: degerOf(sube.find(x => x.hafta === h), g) })).filter(x => x.ogr !== null || x.sube !== null)
+  }, [analiz, o, seri, aktifDers, g])
 
   if (!o || !analiz) return <div className="space-y-3"><Link to="/ogrenciler" className="text-accent font-medium">‹ Öğrenciler</Link><Bos>Öğrenci bulunamadı.</Bos></div>
 
@@ -76,25 +78,25 @@ export default function OgrenciDetay() {
         </div>))}
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        {DERSLER.map(d => { const l = seri?.get(d); const son = l?.at(-1); const dl = degisim(l); const sec = d === aktifDers; const iner = (dl ?? 0) < 0; return (
+        {DERSLER.map(d => { const l = seri?.get(d); const son = l?.at(-1); const dl = degisim(l, g); const sec = d === aktifDers; const iner = (dl ?? 0) < 0; return (
           <button key={d} onClick={() => setDers(d)} aria-pressed={sec} className={`card p-3.5 text-left min-h-[110px] ${sec ? '!border-2 !border-down' : ''}`} style={sec && !iner ? { borderColor: 'var(--accent)' } : undefined}>
             <div className="text-sm text-muted truncate">{d}</div>
-            <div className="flex items-baseline justify-between mt-1"><span className={`text-[26px] font-extrabold tabular-nums ${iner ? 'text-down' : ''}`}>{son ? yuzdeYaz(son.yuzde) : '–'}</span><Delta d={dl} className="text-sm" /></div>
-            <div className="mt-1"><Sparkline v={(l ?? []).map(x => x.yuzde)} renk={iner ? 'var(--down)' : 'var(--up)'} w={110} /></div>
+            <div className="flex items-baseline justify-between mt-1"><span className={`text-[26px] font-extrabold tabular-nums ${iner ? 'text-down' : ''}`}>{son && degerOf(son, g) !== null ? degerYaz(degerOf(son, g), g) : '–'}{g === 'net' && son?.max ? <span className="text-xs font-semibold text-muted"> /{son.max}</span> : null}</span><Delta d={dl} className="text-sm" /></div>
+            <div className="mt-1"><Sparkline v={(l ?? []).map(x => degerOf(x, g)).filter((x): x is number => x !== null)} renk={iner ? 'var(--down)' : 'var(--up)'} w={110} /></div>
           </button>) })}
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4">
         <Kart>
-          <Baslik>{aktifDers} · haftalık seyir</Baslik>
-          {grafik.length < 2 ? <Bos>Grafik için en az 2 haftalık veri gerekir.</Bos> : (
+          <Baslik sag={<GosterimSecici />}>{aktifDers} · haftalık seyir{g === 'net' ? ' (net)' : ''}</Baslik>
+          {grafik.filter(x => x.ogr !== null).length < 2 ? <Bos>Grafik için en az 2 haftalık veri gerekir.</Bos> : (
             <div className="h-64"><ResponsiveContainer><LineChart data={grafik} margin={{ left: -18, right: 12, top: 12 }}>
               <CartesianGrid stroke="var(--line)" vertical={false} /><XAxis dataKey="h" tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis domain={[0, 100]} tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <Tooltip formatter={x => yuzdeYaz(Number(x), 1)} contentStyle={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 12 }} />
+              <YAxis domain={[0, g === 'net' ? Math.max(1, Math.ceil(Math.max(...(seri?.get(aktifDers) ?? []).map(x => x.max ?? 0)))) || 100 : 100]} tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
+              <Tooltip formatter={x => (g === 'net' ? netYaz(Number(x)) + ' net' : yuzdeYaz(Number(x), 1))} contentStyle={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 12 }} />
               <Legend verticalAlign="top" align="right" iconType="plainline" wrapperStyle={{ fontSize: 12 }} />
-              <Line dataKey="ogr" name={o.adSoyad.split(' ')[0]} stroke="var(--accent)" strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
-              <Line dataKey="sube" name={`${o.sinif}-${o.sube} ortalaması`} stroke="var(--muted)" strokeDasharray="5 4" strokeWidth={2} dot={false} connectNulls />
+              <Line isAnimationActive={false} dataKey="ogr" name={o.adSoyad.split(' ')[0]} stroke="var(--accent)" strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
+              <Line isAnimationActive={false} dataKey="sube" name={`${o.sinif}-${o.sube} ortalaması`} stroke="var(--muted)" strokeDasharray="5 4" strokeWidth={2} dot={false} connectNulls />
             </LineChart></ResponsiveContainer></div>)}
         </Kart>
         <Kart>

@@ -16,10 +16,10 @@ export function KontrolListesi({ kapat }: { kapat: () => void }) {
         <ul className="divide-y divide-line">{dosyalar.map(d => (
           <li key={d.dosyaId} className="py-3 flex items-center gap-3">
             <div className="flex-1 min-w-0"><div className="font-medium break-all">{d.ad}</div><div className="text-sm text-down">{d.ayrinti}</div></div>
-            <button className="btn" onClick={() => setAcik(d.dosyaId)}>Sütunları eşleştir</button>
+            {!/\.pdf$/i.test(d.ad) && <button className="btn" onClick={() => setAcik(d.dosyaId)}>Sütunları eşleştir</button>}
           </li>))}</ul>
       )}
-      <p className="text-xs text-muted mt-3">PDF dosyaları bu sürümde okunmaz (Faz 2).</p>
+      <p className="text-xs text-muted mt-3">PDF'ler sonuç listesi biçiminde değilse (ör. kur listesi) buraya düşer. Düzenlenebilir önizleme sonraki sürümde.</p>
     </Modal>
   )
 }
