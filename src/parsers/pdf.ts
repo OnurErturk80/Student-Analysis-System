@@ -7,6 +7,7 @@ export interface NetSatiri { ogrenciNo: string; ogrenciAd: string; ders: string;
 export interface PdfSonucu {
   sinavAd: string; sinavId: string; tur: SinavTuru; tarih: string | null
   satirlar: NetSatiri[]; sayfaSayisi: number
+  puanlar: { ogrenciNo: string; puan: number }[] // LGS denemelerinde 500 üzerinden puan
   dogrulanamayan: number // net = doğru − yanlış/3 kontrolünden geçmeyen hücre sayısı
   uyarilar: string[]
 }
@@ -71,6 +72,8 @@ export async function pdfCoz(pdf: PdfjsBelge): Promise<PdfCozum> {
   if (!dersler.some(Boolean)) return { ok: false, neden: 'Ders sütunları tanınmadı' }
 
   const satirlar: NetSatiri[] = []
+  const puanlar: { ogrenciNo: string; puan: number }[] = []
+  const lgs = baslik.kelime.toUpperCase() === 'LGS'
   let dogrulanamayan = 0
   const uyarilar: string[] = []
   const ilkAnc = anc[0]
@@ -96,6 +99,10 @@ export async function pdfCoz(pdf: PdfjsBelge): Promise<PdfCozum> {
       const aY = Math.max(...sayisal.map(o => o.y))
       const A = sayisal.filter(o => Math.abs(o.y - aY) < 2.5)
       const pairler = b.filter(o => CIFT.test(o.s))
+      if (lgs) {
+        const h0 = A.find(o => enYakin(o.x) === 0)
+        if (h0 && !dersler[0]) { const pz = f(h0.s); if (pz >= 100 && pz <= 500) puanlar.push({ ogrenciNo: String(Number(m[1])), puan: pz }) }
+      }
       anc.forEach((_, c) => {
         const ders = dersler[c]; if (!ders) return
         const h = A.find(o => enYakin(o.x) === c); if (!h) return
@@ -118,7 +125,7 @@ export async function pdfCoz(pdf: PdfjsBelge): Promise<PdfCozum> {
     ok: true,
     veri: {
       sinavAd: baslik.ad, sinavId: sinavKimligi(baslik.ad), tur: sinavTuru(baslik.ad + ' ' + baslik.kelime), tarih: baslik.tarih,
-      satirlar: son, sayfaSayisi: pdf.numPages, dogrulanamayan, uyarilar,
+      satirlar: son, sayfaSayisi: pdf.numPages, puanlar, dogrulanamayan, uyarilar,
     },
   }
 }

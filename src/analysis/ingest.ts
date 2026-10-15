@@ -76,6 +76,10 @@ export function netIsle(db: DB, v: PdfSonucu, dosyaId: string, degisiklikTarihi:
     const r: DersSonuc = { sinavId: id, ogrenciNo: o.no, ders: s.ders, yuzde: round(Math.max(0, Math.min(100, (s.net / s.soru) * 100))), soru: s.soru, net: s.net }
     db.dersSonuclari.push(r); dersMap.set(o.no + '|' + s.ders, r); yeniSatir++
   }
+  if (v.puanlar.length) {
+    db.lgsPuanlari = db.lgsPuanlari.filter(x => x.sinavId !== id)
+    for (const p of v.puanlar) if (bilinen.has(p.ogrenciNo)) db.lgsPuanlari.push({ sinavId: id, ogrenciNo: p.ogrenciNo, puan: p.puan })
+  }
   const sinif = [...siniflar].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 8
   const tarih = v.tarih ?? sinav?.tarih ?? degisiklikTarihi.slice(0, 10) // PDF'teki tarih kesindir
   const yeni: Sinav = { id, ad: sinav?.ad ?? v.sinavAd, tur: sinav?.tur ?? v.tur, tarih, sinif: sinav?.sinif ?? sinif, yayinevi: sinav?.yayinevi ?? '', kaynakDosyaId: sinav?.kaynakDosyaId ?? dosyaId }

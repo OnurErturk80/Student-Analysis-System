@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { demoDB } from '../data/demo'
-import { analizEt, guncelKur } from './engine'
+import { analizEt, guncelKur, lgsTahmin, lidepKurundan } from './engine'
 import { kazanimIsle, kurIsle, netIsle } from './ingest'
 
 describe('analiz motoru (demo veri)', () => {
@@ -38,7 +38,7 @@ describe('analiz motoru (demo veri)', () => {
   it('PDF neti mevcut satıra eklenir, Excel yeniden işlenince net kaybolmaz', () => {
     const d = structuredClone(db)
     const r0 = d.dersSonuclari.find(x => x.sinavId === 'DEMO2' && x.ogrenciNo === '214' && x.ders === 'Matematik')!
-    const o = netIsle(d, { sinavAd: 'Deneme 2', sinavId: 'DEMO2', tur: 'deneme', tarih: '2026-09-17', sayfaSayisi: 1, dogrulanamayan: 0, uyarilar: [],
+    const o = netIsle(d, { sinavAd: 'Deneme 2', sinavId: 'DEMO2', tur: 'deneme', tarih: '2026-09-17', sayfaSayisi: 1, dogrulanamayan: 0, uyarilar: [], puanlar: [],
       satirlar: [{ ogrenciNo: '214', ogrenciAd: 'x', ders: 'Matematik', net: 7.33, soru: 10 }, { ogrenciNo: '99999', ogrenciAd: 'yok', ders: 'Matematik', net: 5, soru: 10 }] }, 'pdf', '2026-09-17')
     expect(o.eslesen).toBe(1); expect(o.atlanan).toBe(1); expect(r0.net).toBe(7.33)
     const satirlar = d.kazanimSonuclari.filter(x => x.sinavId === 'DEMO2').map(x => ({ sube: 'A', ogrenciNo: x.ogrenciNo, ogrenciAd: 'x', ders: x.ders, kod: x.kod, kazanim: x.ad, soru: x.soru, yuzde: x.yuzde }))
@@ -58,5 +58,28 @@ describe('analiz motoru (demo veri)', () => {
     d.kurGecmisi.push({ id: 'elle', ogrenciNo: '214', tur: 'Matematik', tarih: '2026-10-20', eskiKur: hedef, yeniKur: 'C', neden: 'Elle' })
     const o3 = kurIsle(d, { ...k, satirlar: [{ ...k.satirlar[0], kur: 'E' }] }, '2026-10-05'); expect(o3.daYeni).toBe(1)
     expect(guncelKur(d, '214', 'Matematik')).toBe('C')
+  })
+  it('LGS tahmini son N denemenin puan ortalamasıdır', () => {
+    const t = lgsTahmin(db, '214')
+    expect(t.n).toBe(3); expect(t.puanlar.length).toBe(6)
+    const son3 = t.puanlar.slice(-3).map(p => p.puan)
+    expect(t.tahmin).toBe(Math.round(son3.reduce((x, y) => x + y, 0) / 3))
+    expect(t.dersNet.length).toBeGreaterThan(0)
+    expect(lgsTahmin(db, 'yok').tahmin).toBeNull()
+  })
+  it('LİDEP kuru puandan: A en yüksek, eşiklerin altı F', () => {
+    const e = [470, 440, 400, 360, 320]
+    expect([480, 470, 450, 400, 359, 321, 100].map(p => lidepKurundan(p, e))).toEqual(['A', 'A', 'B', 'C', 'E', 'E', 'F'])
+  })
+  it('LİDEP önerisi her seferinde bir kur kaydırır, 7. sınıfa öneri çıkmaz', () => {
+    const d = structuredClone(db)
+    d.ayarlar.esikler.lidepEsik = [900, 800, 700, 600, 500] // herkes F olmalı
+    const a2 = analizEt(d)
+    const l = a2.kurOnerileri.filter(k => k.tur === 'LİDEP')
+    expect(l.length).toBeGreaterThan(0)
+    for (const k of l) {
+      expect(k.yon).toBe('alt'); expect('ABCDEF'.indexOf(k.onerilen) - 'ABCDEF'.indexOf(k.mevcut)).toBe(1)
+      expect(a2.ogr.get(k.ogrenciNo)!.sinif).toBe(8)
+    }
   })
 })

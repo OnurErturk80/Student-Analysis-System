@@ -66,11 +66,17 @@ Student Analysis System/
 - **CSV** (UTF-8 veya Türkçe Excel’in Windows-1254 kodlaması; `;` `,` ya da sekme ayracı; `66,7` gibi virgüllü ondalıklar): Excel kazanım raporuyla aynı düzende okunur. Şube, dosya adından (`8_A.csv`) alınır.
 - **Kontrol bekliyor:** PDF tanınmazsa ya da bir net, doğru−yanlış/3 ile uyuşmazsa dosya bu listeye düşer. Şüpheli satırları önizlemede düzeltip onaylayabilir ya da dosyayı atlayabilirsiniz.
 
+## LGS tahmini, LİDEP kuru ve karne
+- **LGS puanı** deneme sınavlarının PDF sonuç listesinden okunur (500 üzerinden). **LGS tahmini** = son N denemenin (varsayılan 3) puan ortalamasıdır; resmî hesap değildir. Hedef puan Ayarlar’dadır.
+- **LİDEP kuru** LGS puanına bağlıdır: Ayarlar’daki A–E alt puan sınırlarına göre öneri üretilir (her seferinde bir kur). **Varsayılan sınırlar örnektir; kendi gruplarınıza göre değiştirin.**
+- **Karne PDF’i**: öğrenci sayfasındaki **Karne** düğmesi A4 gelişim karnesi üretir (ders tablosu, haftalık grafik, çalışılacak kazanımlar, LGS, kur geçmişi, not satırları). Görüşme notları karneye **konmaz**. Türkçe karakterler için Liberation Sans yazı tipi (`public/fonts`) kullanılır.
+- Eski veritabanlarında eksik sekmeler (ör. `lgs_puanlari`) ilk açılışta otomatik eklenir.
+
 ## Sürümler
 - **Faz 1** (bu sürüm): Google girişi, klasör seçimi, öğrenci listesi, Excel kazanım okuma + sütun şablonu, “Analiz Et”, Panel, Öğrenci detayı + grafikler, Şube haritası, Kazanım analizi, Veli uyarıları (ara/WhatsApp/not), Kur önerileri (Matematik), Ayarlar.
 - **Faz 2** (tamam): PDF net okuma, kur listesi içe aktarma, CSV, “Kontrol bekliyor” düzenlenebilir önizleme.
-- **Faz 3**: Kur kuralları ve LİDEP kuru, ayarların tamamı.
-- **Faz 4**: LGS net/puan tahmini, PDF karne, çevrimdışı önbellek.
+- **Faz 3** (tamam): LİDEP kuru, kur kuralları ve WhatsApp şablonu Ayarlar’dan düzenlenir.
+- **Faz 4** (tamam): LGS tahmini, PDF karne. Çevrimdışı önbellek: uygulama kabuğu PWA ile önbelleğe alınır; veriler çevrimiçi Drive’dan okunur.
 
 ## Güvenlik ve KVKK notları
 - Veriler çocuklara aittir: yalnızca Drive’ınızda tutulur; uygulama bunları herhangi bir sunucuya göndermez.

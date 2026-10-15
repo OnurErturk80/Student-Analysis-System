@@ -3,7 +3,7 @@ import type { DB, Gorusme, KurKaydi, KurTuru, Ayarlar, SutunSablonu, TabAdi } fr
 import { bosDB } from './types'
 import { analizEt, guncelKur, type Analiz, type Gosterim } from './analysis/engine'
 import { kazanimIsle, kurIsle, netIsle, ogrenciListesiIsle } from './analysis/ingest'
-import { demoDB, demoNetEkle, demoYeniHafta } from './data/demo'
+import { demoDB, demoNetEkle, demoPuanEkle, demoYeniHafta } from './data/demo'
 import { CLIENT_ID, cikisYap, eposta, girisYap } from './google/auth'
 import { agacDosyalari, indir, klasorAra, klasorBilgi, KLASOR, type DriveDosya } from './google/drive'
 import { dbBul, dbKaydet, dbOlustur, dbYukle, DB_ADI } from './google/sheets'
@@ -161,7 +161,7 @@ export const useStore = create<State>((set, get) => ({
         if (mod === 'demo') {
           const y = demoYeniHafta(db)!
           const o = kazanimIsle(db, y.dosya, b.id, y.tarih)
-          demoNetEkle(db, o.sinavId, Math.random)
+          demoNetEkle(db, o.sinavId, Math.random); demoPuanEkle(db, o.sinavId)
           ;(['sinavlar', 'ders_sonuclari', 'kazanim_sonuclari'] as TabAdi[]).forEach(t => dokunulan.add(t))
           kaydet(b, 'İşlendi', '', o.sinavId); ozet.satirlar.push(`${b.ad}: ${o.ogrenci} öğrenci işlendi`)
           continue
@@ -185,7 +185,7 @@ export const useStore = create<State>((set, get) => ({
             kaydet(b, 'Kontrol bekliyor', m); ozet.hata.push(`${b.ad}: ${m}`); continue
           }
           const n = netIsle(db, c.veri, b.id, b.modifiedTime)
-          ;(['sinavlar', 'ders_sonuclari'] as TabAdi[]).forEach(t => dokunulan.add(t))
+          ;(['sinavlar', 'ders_sonuclari', 'lgs_puanlari'] as TabAdi[]).forEach(t => dokunulan.add(t))
           const uyar = [n.atlanan ? `${n.atlanan} satır öğrenci listesinde olmadığı için atlandı` : '', ...c.veri.uyarilar].filter(Boolean)
           kaydet(b, 'İşlendi', uyar.join('; '), n.sinavId)
           ozet.satirlar.push(`${c.veri.sinavAd}: ${n.eslesen} öğrenci için net işlendi${uyar.length ? ` (${uyar.join('; ')})` : ''}`)
@@ -252,7 +252,7 @@ export const useStore = create<State>((set, get) => ({
     const d = db.islenenDosyalar.find(x => x.dosyaId === dosyaId)
     const n = netIsle(db, veri, dosyaId, d?.sonDegisiklik ?? new Date().toISOString())
     if (d) Object.assign(d, { durum: 'İşlendi', ayrinti: 'Önizlemede onaylandı' + (n.atlanan ? `; ${n.atlanan} satır atlandı` : ''), sinavId: n.sinavId, islenmeTarihi: new Date().toISOString() })
-    await get().kaydet(['sinavlar', 'ders_sonuclari', 'islenen_dosyalar'])
+    await get().kaydet(['sinavlar', 'ders_sonuclari', 'lgs_puanlari', 'islenen_dosyalar'])
   },
   async dosyaAtla(dosyaId) {
     const d = get().db.islenenDosyalar.find(x => x.dosyaId === dosyaId)

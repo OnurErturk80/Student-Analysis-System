@@ -8,6 +8,7 @@ const MENU = [
   { to: '/subeler', n: 'bars', ad: 'Şubeler' },
   { to: '/kazanim', n: 'target', ad: 'Kazanım Analizi' },
   { to: '/uyarilar', n: 'bell', ad: 'Veli Uyarıları' },
+  { to: '/lgs', n: 'flag', ad: 'LGS Tahmini' },
   { to: '/kurlar', n: 'layers', ad: 'Kur Yönetimi' },
   { to: '/ayarlar', n: 'gear', ad: 'Ayarlar' },
 ]
@@ -33,7 +34,7 @@ export default function Layout() {
         {MENU.map(m => (
           <NavLink key={m.to} to={m.to} end={m.to === '/'} title={m.ad}
             className={({ isActive }) => `flex items-center gap-3 min-h-11 px-3 rounded-xl text-[15px] font-medium lg:flex-row max-lg:flex-col max-lg:gap-0.5 max-lg:py-2 max-lg:text-[11px] ${isActive ? 'bg-soft text-accent font-semibold' : 'text-ink hover:bg-bg'}`}>
-            <Icon n={m.n} size={20} /><span className="max-lg:text-center max-lg:leading-tight">{m.ad.replace('Kazanım Analizi', 'Kazanım').replace('Veli Uyarıları', 'Uyarılar').replace('Kur Yönetimi', 'Kurlar')}</span>
+            <Icon n={m.n} size={20} /><span className="max-lg:text-center max-lg:leading-tight">{m.ad.replace('Kazanım Analizi', 'Kazanım').replace('Veli Uyarıları', 'Uyarılar').replace('Kur Yönetimi', 'Kurlar').replace('LGS Tahmini', 'LGS')}</span>
             <span className="hidden lg:contents">{rozet(m.to)}</span>
           </NavLink>
         ))}

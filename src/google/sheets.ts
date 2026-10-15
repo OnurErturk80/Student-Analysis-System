@@ -25,7 +25,17 @@ export async function dbOlustur(klasorId: string): Promise<string> {
   await tasi(r.spreadsheetId, klasorId)
   return r.spreadsheetId
 }
+/** Eski veritabanlarında sonradan eklenen sekmeleri tamamlar */
+async function sekmeleriTamamla(id: string) {
+  const m = await gapi<{ sheets: { properties: { title: string } }[] }>(`${S}/${id}?fields=sheets.properties.title`)
+  const var_ = new Set(m.sheets.map(s => s.properties.title))
+  const eksik = TABLAR.filter(t => !var_.has(t))
+  if (!eksik.length) return
+  await gapi(`${S}/${id}:batchUpdate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requests: eksik.map(t => ({ addSheet: { properties: { title: t, gridProperties: { frozenRowCount: 1 } } } })) }) })
+  await gapi(`${S}/${id}/values:batchUpdate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ valueInputOption: 'RAW', data: eksik.map(t => ({ range: `${t}!A1`, values: [SEKMELER[t]] })) }) })
+}
 export async function dbYukle(id: string): Promise<DB> {
+  await sekmeleriTamamla(id)
   const db = bosDB()
   const ranges = TABLAR.map(t => `ranges=${encodeURIComponent(`${t}!A2:${sutunHarf(SEKMELER[t].length - 1)}`)}`).join('&')
   const r = await gapi<{ valueRanges: { values?: unknown[][] }[] }>(`${S}/${id}/values:batchGet?${ranges}&valueRenderOption=UNFORMATTED_VALUE`)

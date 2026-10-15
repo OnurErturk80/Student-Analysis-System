@@ -94,7 +94,7 @@ export function analizEt(db: DB): Analiz {
 
   const analiz: Analiz = { haftalar, haftaNo, seri, subeSeri, ogr, uyarilar: [], kurOnerileri: [] }
   analiz.uyarilar = uyariUret(db, analiz)
-  analiz.kurOnerileri = kurOner(db, analiz)
+  analiz.kurOnerileri = [...kurOner(db, analiz), ...lidepOner(db, analiz)]
   return analiz
 }
 
@@ -176,4 +176,54 @@ export function kazanimOrtalama(db: DB, f: (no: string) => boolean, ders: string
     x.t += r.yuzde; x.w += 1; m.set(r.kod + r.ad, x)
   }
   return [...m.values()].map(x => ({ kod: x.kod, ad: x.ad, yuzde: Math.round(x.t / x.w) })).sort((a, b) => a.yuzde - b.yuzde)
+}
+
+// ---------------------------------------------------------------- LGS
+export interface LgsTahmin {
+  tahmin: number | null // son N denemenin LGS puanı ortalaması
+  puanlar: { sinavId: string; ad: string; tarih: string; puan: number }[]
+  hedef: number
+  dersNet: { ders: string; net: number; max: number }[] // son N denemenin ders net ortalaması
+  n: number
+}
+/** Tahmin = son N deneme sınavının (PDF'teki) LGS puanı ortalaması. Resmî hesap değildir. */
+export function lgsTahmin(db: DB, no: string): LgsTahmin {
+  const e = db.ayarlar.esikler
+  const sinav = new Map(db.sinavlar.filter(s => s.tur === 'deneme').map(s => [s.id, s]))
+  const puanlar = db.lgsPuanlari.filter(p => p.ogrenciNo === no && sinav.has(p.sinavId))
+    .map(p => ({ sinavId: p.sinavId, ad: sinav.get(p.sinavId)!.ad, tarih: sinav.get(p.sinavId)!.tarih, puan: p.puan }))
+    .sort((a, b) => a.tarih.localeCompare(b.tarih))
+  const son = puanlar.slice(-Math.max(1, e.lidepSinav))
+  const tahmin = son.length ? Math.round(son.reduce((t, p) => t + p.puan, 0) / son.length) : null
+  const sonIds = new Set(son.map(p => p.sinavId))
+  const m = new Map<string, { t: number; max: number; n: number }>()
+  for (const r of db.dersSonuclari) {
+    if (r.ogrenciNo !== no || !sonIds.has(r.sinavId) || r.net === null || r.net === undefined) continue
+    const x = m.get(r.ders) ?? { t: 0, max: 0, n: 0 }; x.t += r.net; x.max += r.soru; x.n++; m.set(r.ders, x)
+  }
+  const dersNet = [...m].map(([ders, x]) => ({ ders, net: Math.round((x.t / x.n) * 100) / 100, max: Math.round(x.max / x.n) }))
+  return { tahmin, puanlar, hedef: e.lgsHedef, dersNet, n: son.length }
+}
+/** Puandan LİDEP kuru: lidepEsik = [A,B,C,D,E] alt sınırları, altı F */
+export function lidepKurundan(puan: number, esik: number[]): string {
+  const i = esik.findIndex(x => puan >= x)
+  return KURLAR[i < 0 ? KURLAR.length - 1 : i]
+}
+/** LİDEP kuru LGS puanına göre belirlenir; öneri her seferinde bir kur kaydırır. */
+export function lidepOner(db: DB, a: Analiz): KurOnerisi[] {
+  const e = db.ayarlar.esikler
+  const out: KurOnerisi[] = []
+  for (const o of a.ogr.values()) {
+    if (!o.aktif || o.sinif !== 8) continue
+    const mevcut = guncelKur(db, o.no, 'LİDEP'); if (!mevcut) continue
+    const t = lgsTahmin(db, o.no)
+    if (t.tahmin === null || t.n < 2) continue
+    const hedef = lidepKurundan(t.tahmin, e.lidepEsik)
+    const i = KURLAR.indexOf(mevcut as (typeof KURLAR)[number]), j = KURLAR.indexOf(hedef as (typeof KURLAR)[number])
+    if (i < 0 || i === j) continue
+    const yon = j < i ? 'üst' : 'alt'
+    out.push({ ogrenciNo: o.no, tur: 'LİDEP', mevcut, onerilen: KURLAR[i + (j < i ? -1 : 1)], yon, anahtar: `kur:LİDEP:${t.puanlar.at(-1)!.sinavId}`,
+      neden: `Son ${t.n} denemenin LGS puanı ortalaması ${t.tahmin} (${hedef} kuru aralığı)` })
+  }
+  return out
 }
