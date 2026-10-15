@@ -45,6 +45,16 @@ function haftaDosyasi(db: DB, hafta: number, ad: string, tarih: string, r: () =>
 }
 
 /** Demo: doğru sayısından yanlış dağıtıp net üretir (net = doğru − yanlış/3) */
+export function demoPuanEkle(db: DB, sinavId: string) {
+  const top = new Map<string, [number, number]>()
+  for (const x of db.dersSonuclari) if (x.sinavId === sinavId) { const t = top.get(x.ogrenciNo) ?? [0, 0]; t[0] += x.yuzde * x.soru; t[1] += x.soru; top.set(x.ogrenciNo, t) }
+  db.lgsPuanlari = db.lgsPuanlari.filter(p => p.sinavId !== sinavId)
+  for (const o of db.ogrenciler) {
+    const t = top.get(o.no); if (!t || o.sinif !== 8) continue
+    const ort = t[0] / t[1]
+    db.lgsPuanlari.push({ sinavId, ogrenciNo: o.no, puan: Math.round((100 + 400 * Math.pow(ort / 100, 0.85)) * 1000) / 1000 })
+  }
+}
 export function demoNetEkle(db: DB, sinavId: string, r: () => number) {
   for (const x of db.dersSonuclari) {
     if (x.sinavId !== sinavId) continue
@@ -80,7 +90,7 @@ export function demoDB(): DB {
     db.kurGecmisi.push({ id: `k-${o.no}-m`, ogrenciNo: o.no, tur: 'Matematik', tarih: '2026-09-07', eskiKur: '', yeniKur: kur, neden: 'Başlangıç' })
     if (o.sinif === 8) db.kurGecmisi.push({ id: `k-${o.no}-l`, ogrenciNo: o.no, tur: 'LİDEP', tarih: '2026-09-07', eskiKur: '', yeniKur: kur, neden: 'Başlangıç' })
   }
-  TARIHLER.forEach((t, h) => { kazanimIsle(db, haftaDosyasi(db, h, `Deneme ${h + 1}`, t, r), `demo-${h}`, t); demoNetEkle(db, `DEMO${h + 1}`, r) })
+  TARIHLER.forEach((t, h) => { kazanimIsle(db, haftaDosyasi(db, h, `Deneme ${h + 1}`, t, r), `demo-${h}`, t); demoNetEkle(db, `DEMO${h + 1}`, r); demoPuanEkle(db, `DEMO${h + 1}`) })
   db.islenenDosyalar = TARIHLER.map((t, h) => ({ dosyaId: `demo-${h}`, ad: `Deneme ${h + 1}.xls`, sonDegisiklik: t, durum: 'İşlendi' as const, ayrinti: '', sinavId: `DEMO${h + 1}`, islenmeTarihi: t }))
   db.ayarlar.izinliEposta = []
   return db

@@ -72,6 +72,8 @@ varsa('PDF toplu sonuç listeleri', () => {
         const ogr = new Set(c.veri.satirlar.map(s => s.ogrenciNo)).size
         console.log(f.slice(9, 36), c.veri.sinavId, c.veri.tur, c.veri.tarih, 'öğrenci', ogr, 'satır', c.veri.satirlar.length, 'şüpheli', c.veri.dogrulanamayan, [...new Set(c.veri.satirlar.map(s => s.ders))].join(','))
         expect(c.veri.dogrulanamayan).toBe(0)
+        if (c.veri.tur === 'deneme') { expect(c.veri.puanlar.length, 'LGS puanı').toBe(ogr); expect(c.veri.puanlar.every(p => p.puan >= 100 && p.puan <= 500)).toBe(true); console.log('örnek puan', c.veri.puanlar[0]) }
+        else expect(c.veri.puanlar).toHaveLength(0)
       }
     }
   }, 60000)

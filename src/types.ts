@@ -21,6 +21,7 @@ export type SinavTuru = 'deneme' | 'foy' | 'tarama' | 'diger'
 export interface Sinav { id: string; ad: string; tur: SinavTuru; tarih: string; sinif: number; yayinevi: string; kaynakDosyaId: string }
 export interface DersSonuc { sinavId: string; ogrenciNo: string; ders: string; yuzde: number; soru: number; net: number | null }
 export interface KazanimSonuc { sinavId: string; ogrenciNo: string; ders: string; kod: string; ad: string; soru: number; yuzde: number }
+export interface LgsPuan { sinavId: string; ogrenciNo: string; puan: number }
 export interface KurKaydi { id: string; ogrenciNo: string; tur: KurTuru; tarih: string; eskiKur: string; yeniKur: string; neden: string }
 export interface Gorusme { id: string; ogrenciNo: string; uyariAnahtar: string; uyariMetni: string; durum: 'Bekliyor' | 'Görüşüldü'; tarih: string; not: string }
 export interface IslenenDosya {
@@ -39,12 +40,17 @@ export interface SutunSablonu {
 export interface Esikler {
   dususPuan: number; dususHafta: number; genelAlt: number
   ustKurOrt: number; ustKurSinav: number; altKurOrt: number
+  lgsHedef: number // varsayılan hedef LGS puanı
+  lidepEsik: number[] // LİDEP kuru için A..E alt puan sınırları (F: bunların altı)
+  lidepSinav: number // LGS ortalaması için son kaç deneme
 }
-export interface Ayarlar { esikler: Esikler; izinliEposta: string[]; sablonlar: SutunSablonu[] }
+export interface Ayarlar { esikler: Esikler; izinliEposta: string[]; sablonlar: SutunSablonu[]; whatsappSablonu: string }
+export const WHATSAPP_VARSAYILAN = 'Merhaba {veli}, {ogrenci} ile ilgili {konu} hakkında kısaca görüşmek isterim. Uygun olduğunuzda dönüş yapabilir misiniz? Teşekkürler.'
 export const VARSAYILAN_AYARLAR: Ayarlar = {
-  esikler: { dususPuan: 10, dususHafta: 2, genelAlt: 40, ustKurOrt: 80, ustKurSinav: 3, altKurOrt: 40 },
+  esikler: { dususPuan: 10, dususHafta: 2, genelAlt: 40, ustKurOrt: 80, ustKurSinav: 3, altKurOrt: 40, lgsHedef: 450, lidepEsik: [470, 440, 400, 360, 320], lidepSinav: 3 },
   izinliEposta: [],
   sablonlar: [],
+  whatsappSablonu: WHATSAPP_VARSAYILAN,
 }
 
 export interface DB {
@@ -52,13 +58,14 @@ export interface DB {
   sinavlar: Sinav[]
   dersSonuclari: DersSonuc[]
   kazanimSonuclari: KazanimSonuc[]
+  lgsPuanlari: LgsPuan[]
   kurGecmisi: KurKaydi[]
   gorusmeler: Gorusme[]
   ayarlar: Ayarlar
   islenenDosyalar: IslenenDosya[]
 }
 export const bosDB = (): DB => ({
-  ogrenciler: [], sinavlar: [], dersSonuclari: [], kazanimSonuclari: [], kurGecmisi: [], gorusmeler: [],
+  ogrenciler: [], sinavlar: [], dersSonuclari: [], kazanimSonuclari: [], lgsPuanlari: [], kurGecmisi: [], gorusmeler: [],
   ayarlar: structuredClone(VARSAYILAN_AYARLAR), islenenDosyalar: [],
 })
-export type TabAdi = 'ogrenciler' | 'sinavlar' | 'ders_sonuclari' | 'kazanim_sonuclari' | 'kur_gecmisi' | 'veli_gorusmeleri' | 'kurallar' | 'islenen_dosyalar'
+export type TabAdi = 'ogrenciler' | 'sinavlar' | 'ders_sonuclari' | 'kazanim_sonuclari' | 'lgs_puanlari' | 'kur_gecmisi' | 'veli_gorusmeleri' | 'kurallar' | 'islenen_dosyalar'

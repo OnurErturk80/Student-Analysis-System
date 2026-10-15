@@ -10,6 +10,7 @@ import Kazanim from './pages/Kazanim'
 import Uyarilar from './pages/Uyarilar'
 import Kurlar from './pages/Kurlar'
 import Ayarlar from './pages/Ayarlar'
+import Lgs from './pages/Lgs'
 
 export default function App() {
   const yuklu = useStore(s => s.yuklu)
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="subeler" element={<Subeler />} />
           <Route path="kazanim" element={<Kazanim />} />
           <Route path="uyarilar" element={<Uyarilar />} />
+          <Route path="lgs" element={<Lgs />} />
           <Route path="kurlar" element={<Kurlar />} />
           <Route path="ayarlar" element={<Ayarlar />} />
           <Route path="*" element={<Panel />} />

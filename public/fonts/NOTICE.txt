@@ -1,0 +1,4 @@
+Liberation Sans (Regular, Bold) — Liberation Fonts, https://github.com/liberationfonts
+Karne PDF'lerinde Türkçe karakterleri göstermek için kullanılır.
+Lisans: Liberation Fonts, yazı tipi istisnalı GNU GPL v2 / SIL Open Font License (sürüme göre) altında dağıtılır;
+yazı tipi dosyalarının yeniden dağıtımına ve PDF'lere gömülmesine izin verir.

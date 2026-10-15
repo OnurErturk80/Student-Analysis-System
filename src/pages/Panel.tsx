@@ -73,6 +73,7 @@ export default function Panel() {
           <button className="text-left" onClick={() => setKontrol(true)}><Kart className="h-full"><div className="text-sm text-muted">Kontrol bekliyor</div><div className="text-[30px] font-extrabold tabular-nums">{kontrolSayi}</div><div className="text-sm text-muted">dosya</div></Kart></button>
         </div>
 
+        {db.lgsPuanlari.length > 0 && <Link to="/lgs" className="card px-4 min-h-14 flex items-center gap-3"><Icon n="flag" className="text-accent" /><span className="flex-1 font-semibold">LGS tahmini (8. sınıflar)</span><span className="text-accent font-medium">Aç ›</span></Link>}
         <div className="grid md:grid-cols-2 gap-4">
           <Kart>
             <Baslik sag="bu hafta / geçen hafta">{g === 'net' ? 'Ders net ortalamaları' : 'Ders ortalamaları'}</Baslik>

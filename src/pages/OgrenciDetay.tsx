@@ -10,6 +10,8 @@ import { GosterimSecici, degerYaz, netYaz, useGosterim } from '../ui/gosterim'
 import { yuzdeYaz } from '../lib/tr'
 import { bugun, tarihGuzel } from '../lib/weeks'
 import { whatsappLink } from '../lib/mesaj'
+import { LgsKart } from '../ui/LgsKart'
+import { karneIndir } from '../pdf/karneIndir'
 
 export default function OgrenciDetay() {
   const { no } = useParams()
@@ -21,6 +23,7 @@ export default function OgrenciDetay() {
   const [not, setNot] = useState(false)
   const [metin, setMetin] = useState('')
   const [sinavSec, setSinavSec] = useState('')
+  const [karne, setKarne] = useState<'' | 'hazirlaniyor' | 'hata'>('')
 
   const seri = analiz?.seri.get(no ?? '')
   const uyariDersi = (no && analiz?.uyarilar.find(u => u.ogrenciNo === no && u.ders !== 'Genel')?.ders) || ''
@@ -44,7 +47,7 @@ export default function OgrenciDetay() {
   const kurlar = db.kurGecmisi.filter(k => k.ogrenciNo === o.no).sort((a, b) => b.tarih.localeCompare(a.tarih))
   const notlar = db.gorusmeler.filter(g => g.ogrenciNo === o.no).sort((a, b) => b.tarih.localeCompare(a.tarih))
   const sinifTag = 'px-2.5 py-1 rounded-lg bg-bg text-sm font-semibold border border-line'
-  const wa = veli?.tel ? whatsappLink(veli.tel, veli.ad, o.adSoyad, uyarilar[0]?.ders) : null
+  const wa = veli?.tel ? whatsappLink(db.ayarlar.whatsappSablonu, veli.tel, veli.ad, o.adSoyad, uyarilar[0]?.ders) : null
 
   return (
     <div className="space-y-4">
@@ -66,7 +69,7 @@ export default function OgrenciDetay() {
         <div className="flex gap-2 w-full md:w-auto">
           {veli?.tel ? <a className="btn btn-call flex-1 whitespace-nowrap !px-2" href={`tel:+${veli.tel}`}><Icon n="phone" size={18} />Veliyi ara</a> : <button className="btn flex-1" disabled>Telefon yok</button>}
           {wa ? <a className="btn flex-1 whitespace-nowrap !px-2" href={wa} target="_blank" rel="noreferrer"><Icon n="chat" size={18} />Mesaj<span className="hidden md:inline">&nbsp;(WhatsApp)</span></a> : <button className="btn flex-1" disabled>Mesaj</button>}
-          <button className="btn flex-1 whitespace-nowrap !px-2" disabled title="Faz 4'te eklenecek"><Icon n="doc" size={18} />Karne</button>
+          <button className="btn flex-1 whitespace-nowrap !px-2" disabled={karne === 'hazirlaniyor'} onClick={async () => { setKarne('hazirlaniyor'); try { await karneIndir(db, analiz, o.no); setKarne('') } catch { setKarne('hata') } }}><Icon n="doc" size={18} />{karne === 'hazirlaniyor' ? 'Hazırlanıyor…' : karne === 'hata' ? 'Tekrar dene' : <>Karne<span className="hidden md:inline">&nbsp;PDF</span></>}</button>
         </div>
       </header>
 
@@ -108,7 +111,8 @@ export default function OgrenciDetay() {
         </Kart>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-4">
+      <div className={`grid gap-4 ${o.sinif === 8 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
+        {o.sinif === 8 && <LgsKart no={o.no} />}
         <Kart>
           <Baslik>Kur geçmişi</Baslik>
           {kurlar.length === 0 ? <Bos>Kur kaydı yok.</Bos> : <ol className="space-y-3">{kurlar.map(k => (

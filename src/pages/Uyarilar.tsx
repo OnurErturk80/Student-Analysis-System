@@ -36,7 +36,7 @@ export default function Uyarilar() {
             {g?.not && <p className="mt-2 text-sm rounded-xl bg-bg p-2.5 whitespace-pre-wrap">{g.not}</p>}
             <div className="grid grid-cols-3 gap-2 mt-3">
               {v?.tel ? <a className="btn btn-call" href={`tel:+${v.tel}`}>Ara</a> : <button className="btn" disabled>Ara</button>}
-              {v?.tel ? <a className="btn" href={whatsappLink(v.tel, v.ad, o.adSoyad, u.ders)} target="_blank" rel="noreferrer">WhatsApp</a> : <button className="btn" disabled>WhatsApp</button>}
+              {v?.tel ? <a className="btn" href={whatsappLink(db.ayarlar.whatsappSablonu, v.tel, v.ad, o.adSoyad, u.ders)} target="_blank" rel="noreferrer">WhatsApp</a> : <button className="btn" disabled>WhatsApp</button>}
               <button className="btn" onClick={() => { setAcik(u); setNot(g?.not ?? ''); setGorusuldu(true) }}>Not ekle</button>
             </div>
           </Kart>) })}</div>)}
