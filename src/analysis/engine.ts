@@ -3,7 +3,7 @@ import { KURLAR } from '../types'
 import { haftaAnahtari } from '../lib/weeks'
 import { yuzdeYaz } from '../lib/tr'
 
-export interface Nokta { hafta: string; yuzde: number }
+export interface Nokta { hafta: string; yuzde: number; net?: number; max?: number }
 export const GENEL = 'Genel'
 const GENEL_TURLER = new Set(['deneme', 'foy'])
 
@@ -43,29 +43,52 @@ export function analizEt(db: DB): Analiz {
     ekle(`${r.ogrenciNo}|${r.ders}|${h}`, r.yuzde, r.soru)
     if (GENEL_TURLER.has(s.tur)) ekle(`${r.ogrenciNo}|${GENEL}|${h}`, r.yuzde, r.soru)
   }
+  // Net: aynı hafta birden çok sınav varsa soru sayısı en çok olan (eşitse en yeni) sınavın neti
+  const netAcc = new Map<string, { net: number; max: number; tarih: string }>()
+  const netYaz = (k: string, net: number, max: number, tarih: string) => {
+    const e = netAcc.get(k)
+    if (!e || max > e.max || (max === e.max && tarih > e.tarih)) netAcc.set(k, { net, max, tarih })
+  }
+  const genelSinav = new Map<string, { net: number; max: number; n: number; hafta: string; tarih: string }>()
+  for (const r of db.dersSonuclari) {
+    if (r.net === null || r.net === undefined) continue
+    const s = sinav.get(r.sinavId); if (!s) continue
+    const h = haftaAnahtari(s.tarih)
+    netYaz(`${r.ogrenciNo}|${r.ders}|${h}`, r.net, r.soru, s.tarih)
+    if (GENEL_TURLER.has(s.tur)) {
+      const g = genelSinav.get(r.sinavId + '|' + r.ogrenciNo) ?? { net: 0, max: 0, n: 0, hafta: h, tarih: s.tarih }
+      g.net += r.net; g.max += r.soru; g.n++; genelSinav.set(r.sinavId + '|' + r.ogrenciNo, g)
+    }
+  }
+  for (const [k, g] of genelSinav) if (g.n >= 4) netYaz(`${k.split('|')[1]}|${GENEL}|${g.hafta}`, g.net, g.max, g.tarih)
   const seri = new Map<string, Map<string, Nokta[]>>()
   for (const [k, [t, w]] of acc) {
     const [no, ders, hafta] = k.split('|')
     let m = seri.get(no); if (!m) seri.set(no, (m = new Map()))
     let l = m.get(ders); if (!l) m.set(ders, (l = []))
-    l.push({ hafta, yuzde: Math.round((t / w) * 10) / 10 })
+    const n = netAcc.get(k)
+    l.push({ hafta, yuzde: Math.round((t / w) * 10) / 10, ...(n ? { net: Math.round(n.net * 100) / 100, max: n.max } : {}) })
   }
   for (const m of seri.values()) for (const l of m.values()) l.sort((a, b) => a.hafta.localeCompare(b.hafta))
 
   const ogr = new Map(db.ogrenciler.map(o => [o.no, o]))
-  const subeAcc = new Map<string, Map<string, Map<string, number[]>>>()
+  const subeAcc = new Map<string, Map<string, Map<string, Nokta[]>>>()
   for (const [no, m] of seri) {
     const o = ogr.get(no); if (!o || !o.aktif) continue
     const sk = subeAnahtari(o)
     for (const [ders, l] of m) for (const n of l) {
       const a = subeAcc.get(sk) ?? new Map(); const b = a.get(ders) ?? new Map(); const c = b.get(n.hafta) ?? []
-      c.push(n.yuzde); b.set(n.hafta, c); a.set(ders, b); subeAcc.set(sk, a)
+      c.push(n); b.set(n.hafta, c); a.set(ders, b); subeAcc.set(sk, a)
     }
   }
   const subeSeri = new Map<string, Map<string, Nokta[]>>()
   for (const [sk, a] of subeAcc) {
     const m = new Map<string, Nokta[]>()
-    for (const [ders, b] of a) m.set(ders, [...b].map(([hafta, v]) => ({ hafta, yuzde: Math.round(ortalama(v) * 10) / 10 })).sort((x, y) => x.hafta.localeCompare(y.hafta)))
+    for (const [ders, b] of a) m.set(ders, [...b].map(([hafta, v]): Nokta => {
+      const nl = v.filter(x => x.net !== undefined)
+      return { hafta, yuzde: Math.round(ortalama(v.map(x => x.yuzde)) * 10) / 10,
+        ...(nl.length ? { net: Math.round(ortalama(nl.map(x => x.net!)) * 100) / 100, max: Math.round(ortalama(nl.map(x => x.max!)) * 10) / 10 } : {}) }
+    }).sort((x, y) => x.hafta.localeCompare(y.hafta)))
     subeSeri.set(sk, m)
   }
 
@@ -135,7 +158,15 @@ export function kurOner(db: DB, a: Analiz): KurOnerisi[] {
 }
 
 export const son = (l?: Nokta[]) => l?.at(-1)
-export const degisim = (l?: Nokta[]) => (l && l.length > 1 ? Math.round((l[l.length - 1].yuzde - l[l.length - 2].yuzde) * 10) / 10 : null)
+export type Gosterim = 'yuzde' | 'net'
+export const degerOf = (n: Nokta | undefined | null, g: Gosterim): number | null => (n ? (g === 'net' ? (n.net ?? null) : n.yuzde) : null)
+/** Renk skalası için her zaman yüzde cinsinden karşılık (net/maks) */
+export const oranOf = (n: Nokta | undefined | null): number | null => (n ? (n.net !== undefined && n.max ? Math.max(0, (n.net / n.max) * 100) : n.yuzde) : null)
+export const degisim = (l?: Nokta[], g: Gosterim = 'yuzde') => {
+  if (!l || l.length < 2) return null
+  const a = degerOf(l[l.length - 1], g), b = degerOf(l[l.length - 2], g)
+  return a === null || b === null ? null : Math.round((a - b) * (g === 'net' ? 100 : 10)) / (g === 'net' ? 100 : 10)
+}
 
 export function kazanimOrtalama(db: DB, f: (no: string) => boolean, ders: string, sinavId: string) {
   const m = new Map<string, { kod: string; ad: string; t: number; w: number }>()

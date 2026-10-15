@@ -19,7 +19,7 @@ export interface Ogrenci {
 }
 export type SinavTuru = 'deneme' | 'foy' | 'tarama' | 'diger'
 export interface Sinav { id: string; ad: string; tur: SinavTuru; tarih: string; sinif: number; yayinevi: string; kaynakDosyaId: string }
-export interface DersSonuc { sinavId: string; ogrenciNo: string; ders: string; yuzde: number; soru: number }
+export interface DersSonuc { sinavId: string; ogrenciNo: string; ders: string; yuzde: number; soru: number; net: number | null }
 export interface KazanimSonuc { sinavId: string; ogrenciNo: string; ders: string; kod: string; ad: string; soru: number; yuzde: number }
 export interface KurKaydi { id: string; ogrenciNo: string; tur: KurTuru; tarih: string; eskiKur: string; yeniKur: string; neden: string }
 export interface Gorusme { id: string; ogrenciNo: string; uyariAnahtar: string; uyariMetni: string; durum: 'Bekliyor' | 'Görüşüldü'; tarih: string; not: string }

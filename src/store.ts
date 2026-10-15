@@ -1,14 +1,15 @@
 import { create } from 'zustand'
 import type { DB, Gorusme, KurKaydi, KurTuru, Ayarlar, SutunSablonu, TabAdi } from './types'
 import { bosDB } from './types'
-import { analizEt, guncelKur, type Analiz } from './analysis/engine'
-import { kazanimIsle, ogrenciListesiIsle } from './analysis/ingest'
-import { demoDB, demoYeniHafta } from './data/demo'
+import { analizEt, guncelKur, type Analiz, type Gosterim } from './analysis/engine'
+import { kazanimIsle, netIsle, ogrenciListesiIsle } from './analysis/ingest'
+import { demoDB, demoNetEkle, demoYeniHafta } from './data/demo'
 import { CLIENT_ID, cikisYap, eposta, girisYap } from './google/auth'
 import { agacDosyalari, indir, klasorAra, klasorBilgi, KLASOR, type DriveDosya } from './google/drive'
 import { dbBul, dbKaydet, dbOlustur, dbYukle, DB_ADI } from './google/sheets'
 import { kazanimCoz, okuBuffer, parmakIzi, type Cozum } from './parsers/kazanim'
 import { ogrenciListesiCoz } from './parsers/ogrenciListesi'
+import { pdfOku } from './parsers/pdfYukle'
 import { bugun } from './lib/weeks'
 
 export type Mod = 'giris' | 'demo' | 'google'
@@ -23,7 +24,8 @@ const guvenli = {
   yaz: (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { /* */ } },
   sil: (k: string) => { try { localStorage.removeItem(k) } catch { /* */ } },
 }
-const DESTEK = /\.(xls|xlsx|csv)$/i
+const DESTEK = /\.(xls|xlsx|pdf)$/i
+const PDF = /\.pdf$/i
 const OGR_LISTESI = /[ÖO]ğ?renci\s*Listesi/i
 const yenile = (db: DB) => ({ db: { ...db }, analiz: analizEt(db) })
 const kimlik = () => Math.random().toString(36).slice(2, 10)
@@ -41,6 +43,8 @@ interface State {
   ozet: Ozet | null
   hata: string | null
   yuklu: boolean
+  gosterim: Gosterim
+  gosterimDegis(g: Gosterim): void
   // eylemler
   demoBaslat(): void
   girisBaslat(): Promise<void>
@@ -59,6 +63,8 @@ interface State {
 export const useStore = create<State>((set, get) => ({
   mod: 'giris', asama: { adim: 'giris' }, email: '', db: bosDB(), analiz: null, klasorId: null, dbId: null,
   bekleyenler: [], ilerleme: null, ozet: null, hata: null, yuklu: false,
+  gosterim: guvenli.al('sas.gosterim') === 'net' ? 'net' : 'yuzde',
+  gosterimDegis(g) { guvenli.yaz('sas.gosterim', g); set({ gosterim: g }) },
 
   demoBaslat() {
     const db = demoDB()
@@ -152,11 +158,23 @@ export const useStore = create<State>((set, get) => ({
         if (mod === 'demo') {
           const y = demoYeniHafta(db)!
           const o = kazanimIsle(db, y.dosya, b.id, y.tarih)
+          demoNetEkle(db, o.sinavId, Math.random)
           ;(['sinavlar', 'ders_sonuclari', 'kazanim_sonuclari'] as TabAdi[]).forEach(t => dokunulan.add(t))
           kaydet(b, 'İşlendi', '', o.sinavId); ozet.satirlar.push(`${b.ad}: ${o.ogrenci} öğrenci işlendi`)
           continue
         }
-        const wb = okuBuffer(await indir({ id: b.id, name: b.ad, mimeType: b.mimeType, modifiedTime: b.modifiedTime } as DriveDosya))
+        const veri = await indir({ id: b.id, name: b.ad, mimeType: b.mimeType, modifiedTime: b.modifiedTime } as DriveDosya)
+        if (PDF.test(b.ad)) {
+          const c = await pdfOku(veri)
+          if (!c.ok) { kaydet(b, 'Kontrol bekliyor', c.neden); ozet.hata.push(`${b.ad}: ${c.neden}. "Kontrol bekliyor" listesine alındı`); continue }
+          const n = netIsle(db, c.veri, b.id, b.modifiedTime)
+          ;(['sinavlar', 'ders_sonuclari'] as TabAdi[]).forEach(t => dokunulan.add(t))
+          const uyar = [n.atlanan ? `${n.atlanan} satır öğrenci listesinde olmadığı için atlandı` : '', ...c.veri.uyarilar].filter(Boolean)
+          kaydet(b, 'İşlendi', uyar.join('; '), n.sinavId)
+          ozet.satirlar.push(`${c.veri.sinavAd}: ${n.eslesen} öğrenci için net işlendi${uyar.length ? ` (${uyar.join('; ')})` : ''}`)
+          continue
+        }
+        const wb = okuBuffer(veri)
         if (b.tur === 'ogrenciListesi') {
           const { ogrenciler, uyarilar } = ogrenciListesiCoz(wb)
           if (!ogrenciler.length) throw new Error('Öğrenci bulunamadı: ' + uyarilar.join('; '))

@@ -57,3 +57,21 @@ varsa('gerçek örnek dosyalar', () => {
     expect(r.ogrenciler.length).toBeGreaterThan(100)
   })
 })
+
+varsa('PDF toplu sonuç listeleri', () => {
+  it('net değerlerini okur ve doğru−yanlış/3 ile doğrular', async () => {
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const { pdfCoz } = await import('./pdf')
+    for (const f of readdirSync(kaynak!).filter(d => /\.pdf$/i.test(d))) {
+      const belge = await getDocument({ data: new Uint8Array(readFileSync(join(kaynak!, f))), useSystemFonts: true }).promise
+      const c = await pdfCoz(belge as never)
+      if (/KURLAR/i.test(f)) { expect(c.ok, 'kur listesi sonuç listesi değildir').toBe(false); continue }
+      expect(c.ok, f).toBe(true)
+      if (c.ok) {
+        const ogr = new Set(c.veri.satirlar.map(s => s.ogrenciNo)).size
+        console.log(f.slice(9, 36), c.veri.sinavId, c.veri.tur, c.veri.tarih, 'öğrenci', ogr, 'satır', c.veri.satirlar.length, 'şüpheli', c.veri.dogrulanamayan, [...new Set(c.veri.satirlar.map(s => s.ders))].join(','))
+        expect(c.veri.dogrulanamayan).toBe(0)
+      }
+    }
+  }, 60000)
+})
