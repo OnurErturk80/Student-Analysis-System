@@ -157,3 +157,20 @@ describe('macOS ayrışık Unicode (NFD) dayanıklılığı', () => {
     const c = kazanimCoz(w2, 'x.xls'); expect(c.ok).toBe(true)
   })
 })
+
+varsa('eski Safari taklidi (ReadableStream async iterator yok): gerçek PDF yine okunur', () => {
+  it('Fenomen deneme PDF', async () => {
+    const proto = ReadableStream.prototype as unknown as Record<symbol | string, unknown>
+    const orijinal = [proto[Symbol.asyncIterator], proto.values]
+    delete proto[Symbol.asyncIterator]; delete proto.values
+    try {
+      const { default: vi } = await import('vitest').then(m => ({ default: m.vi }))
+      vi.resetModules(); await import('../lib/uyumluluk')
+      const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+      const f = readdirSync(kaynak!).find(d => /FENOMEN/.test(d))!
+      const belge = await getDocument({ data: new Uint8Array(readFileSync(join(kaynak!, f))), useSystemFonts: true }).promise
+      const c = await pdfCoz(belge as never)
+      expect(c.ok).toBe(true); if (c.ok) expect(c.veri.satirlar.length).toBe(672)
+    } finally { proto[Symbol.asyncIterator] = orijinal[0]; proto.values = orijinal[1] }
+  }, 60000)
+})

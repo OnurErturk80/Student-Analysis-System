@@ -18,4 +18,23 @@ const M = Map as any
 if (!M.groupBy) M.groupBy = (items: Iterable<unknown>, f: (x: unknown, i: number) => unknown) => { const m = new Map<unknown, unknown[]>(); let i = 0; for (const x of items) { const k = f(x, i++); const l = m.get(k); if (l) l.push(x); else m.set(k, [x]) } return m }
 const g = globalThis as any
 if (typeof g.structuredClone !== 'function') g.structuredClone = (v: unknown) => JSON.parse(JSON.stringify(v))
+// Safari'de ReadableStream üzerinde `for await` yok; pdf.js metin çıkarırken bunu kullanır ("undefined is not a function (near '...e of t...')")
+const RS = (globalThis as any).ReadableStream
+if (RS && !RS.prototype[Symbol.asyncIterator]) {
+  const degerler = function (this: ReadableStream, secenek?: { preventCancel?: boolean }) {
+    const okuyucu = this.getReader()
+    return {
+      async next() {
+        try { const r = await okuyucu.read(); if (r.done) { okuyucu.releaseLock(); return { done: true, value: undefined } } return r } catch (e) { okuyucu.releaseLock(); throw e }
+      },
+      async return() {
+        if (!secenek?.preventCancel) { const iptal = okuyucu.cancel(); okuyucu.releaseLock(); await iptal } else okuyucu.releaseLock()
+        return { done: true, value: undefined }
+      },
+      [Symbol.asyncIterator]() { return this },
+    }
+  }
+  Object.defineProperty(RS.prototype, 'values', { value: degerler, configurable: true, writable: true })
+  Object.defineProperty(RS.prototype, Symbol.asyncIterator, { value: degerler, configurable: true, writable: true })
+}
 export {}
