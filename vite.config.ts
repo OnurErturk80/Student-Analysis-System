@@ -8,6 +8,7 @@ const base = process.env.VITE_BASE ?? '/student-analysis-system/'
 
 export default defineConfig({
   base,
+  define: { __SURUM__: JSON.stringify(`${(process.env.GITHUB_SHA ?? 'yerel').slice(0, 7)} · ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`) },
   plugins: [
     react(),
     tailwindcss(),
