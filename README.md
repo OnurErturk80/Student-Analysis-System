@@ -42,6 +42,13 @@ Gerçek örnek dosyalarla ayrıştırıcı testi için (dosyalar depoya girmez):
    - Ad: `GOOGLE_CLIENT_ID`, Değer: kopyaladığınız istemci kimliği.
 7. **Actions** sekmesinden son çalışmayı yeniden çalıştırın (Re-run) veya yeni bir commit gönderin.
 
+**Sorun giderme (Google girişi)**
+- *“Google istemci kimliği tanımlı değil” / düğme pasif*: GitHub’da `GOOGLE_CLIENT_ID` değişkeni (Variables, Secrets değil) yok ya da kimlik eklendikten sonra yayın yeniden çalıştırılmadı (Actions → Run workflow).
+- *Google penceresinde “Error 400: origin_mismatch”*: Kimlik bilgileri → istemci → “Yetkili JavaScript kaynakları” listesine tam adres eklenmeli: `https://<kullanıcı-adınız>.github.io` (yol ve sondaki `/` olmadan, harf büyüklüğüne dikkat). Giriş ekranındaki hata kutusu tarayıcının kullandığı adresi gösterir.
+- *“Erişim engellendi” / “access_denied”*: OAuth izin ekranında hesabınız **Test kullanıcıları**nda değil.
+- *“Google bu uygulamayı doğrulamadı” uyarısı*: normaldir (uygulama kendi kullanımınız için “Test” durumunda). **Gelişmiş → Student Analysis System’e git (güvenli değil)** deyin; Drive ve E-Tablolar izinlerini onaylayın.
+- *Hiç pencere açılmıyor*: tarayıcı açılır pencereyi engelliyordur; adres çubuğundan izin verin.
+
 ### C) Drive klasör yapısı
 ```
 Student Analysis System/
