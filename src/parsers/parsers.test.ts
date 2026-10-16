@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as XLSX from 'xlsx'
-import { kazanimCoz, okuBuffer, sinavKimligi } from './kazanim'
+import { kazanimCoz, klasorTuru, okuBuffer, sinavKimligi } from './kazanim'
 import { kurCoz, kurTarihleri, pdfCoz, pdfTuru } from './pdf'
 import { ogrenciListesiAdi } from './ogrenciListesi'
 import { ogrenciListesiCoz } from './ogrenciListesi'
@@ -173,4 +173,19 @@ varsa('eski Safari taklidi (ReadableStream async iterator yok): gerçek PDF yine
       expect(c.ok).toBe(true); if (c.ok) expect(c.veri.satirlar.length).toBe(672)
     } finally { proto[Symbol.asyncIterator] = orijinal[0]; proto.values = orijinal[1] }
   }, 60000)
+})
+
+describe('klasöre göre sınav türü', () => {
+  it('Raporlar altındaki Denemeler / Föyler / Taramalar klasörleri türü belirler', () => {
+    expect(klasorTuru('Raporlar/Denemeler/')).toBe('deneme')
+    expect(klasorTuru('Raporlar/Föyler/Hafta 6/')).toBe('foy')
+    expect(klasorTuru('Raporlar/FOYLER/')).toBe('foy')
+    expect(klasorTuru('Raporlar/Föyler/'.normalize('NFD'))).toBe('foy')
+    expect(klasorTuru('Raporlar/Taramalar/Matematik/')).toBe('tarama')
+    expect(klasorTuru('Raporlar/')).toBeNull()
+    expect(klasorTuru('')).toBeNull()
+  })
+  it('en içteki klasör geçerlidir', () => {
+    expect(klasorTuru('Raporlar/Denemeler/Taramalar/')).toBe('tarama')
+  })
 })

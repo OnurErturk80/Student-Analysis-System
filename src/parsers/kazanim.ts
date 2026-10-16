@@ -23,6 +23,16 @@ export const dersAdi = (ham: string) => {
   for (const [re, ad] of DERS_ESLE) if (re.test(t)) return ad
   return t.replace(/\.\d+$/, '')
 }
+export const TUR_AD: Record<SinavTuru, string> = { deneme: 'Deneme', foy: 'Föy', tarama: 'Tarama', diger: 'Diğer' }
+/** Drive yolundan sınav türü: "Raporlar/Denemeler/…", "Raporlar/Föyler/…", "Raporlar/Taramalar/…". Klasör adı dosya adından önce gelir. */
+export function klasorTuru(yol: string): SinavTuru | null {
+  for (const parca of trUpper(yol).split('/').reverse()) {
+    if (parca.includes('TARAMA')) return 'tarama'
+    if (parca.includes('DENEME')) return 'deneme'
+    if (/F[ÖO]Y/.test(parca)) return 'foy'
+  }
+  return null
+}
 export function sinavTuru(ad: string): SinavTuru {
   const u = trUpper(ad)
   if (u.includes('TARAMA')) return 'tarama'

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { DB, Gorusme, KurKaydi, KurTuru, Ayarlar, SutunSablonu, TabAdi } from './types'
+import type { DB, SinavTuru, Gorusme, KurKaydi, KurTuru, Ayarlar, SutunSablonu, TabAdi } from './types'
 import { bosDB } from './types'
 import { analizEt, guncelKur, type Analiz, type Gosterim } from './analysis/engine'
 import { kazanimIsle, kurIsle, netIsle, ogrenciListesiIsle } from './analysis/ingest'
@@ -7,14 +7,14 @@ import { demoDB, demoNetEkle, demoPuanEkle, demoYeniHafta } from './data/demo'
 import { CLIENT_ID, cikisYap, eposta, girisYap, kayitliEposta, kayitliOturum, oturumDinle } from './google/auth'
 import { agacDosyalari, indir, klasorAra, klasorBilgi, KLASOR, type DriveDosya } from './google/drive'
 import { dbBulHepsi, dbKaydet, dbOlustur, dbYukle, DB_ADI, SurumCakismasi, uzakSurum } from './google/sheets'
-import { kazanimCoz, okuBuffer, parmakIzi, type Cozum } from './parsers/kazanim'
+import { kazanimCoz, klasorTuru, okuBuffer, parmakIzi, TUR_AD, type Cozum } from './parsers/kazanim'
 import { ogrenciListesiAdi, ogrenciListesiCoz } from './parsers/ogrenciListesi'
 import { pdfOku } from './parsers/pdfYukle'
 import type { PdfSonucu } from './parsers/pdf'
 import { bugun } from './lib/weeks'
 
 export type Mod = 'giris' | 'demo' | 'google'
-export interface Bekleyen { id: string; ad: string; yol: string; mimeType: string; modifiedTime: string; tur: 'ogrenciListesi' | 'rapor' }
+export interface Bekleyen { id: string; ad: string; yol: string; mimeType: string; modifiedTime: string; tur: 'ogrenciListesi' | 'rapor'; klasorTuru?: SinavTuru | null }
 export interface Ilerleme { toplam: number; biten: number; ad: string }
 export interface Ozet { satirlar: string[]; hata: string[] }
 export interface TaramaSatiri { ad: string; yol: string; durum: string }
@@ -155,8 +155,10 @@ export const useStore = create<State>((set, get) => ({
       const islenen = new Map(db.islenenDosyalar.map(d => [d.dosyaId, d]))
       const bek: Bekleyen[] = []
       const satirlar: TaramaSatiri[] = []
+      const turDuzelt: { sinavId: string; tur: SinavTuru }[] = []
       for (const f of dosyalar) {
-        const gst = (durum: string) => satirlar.push({ ad: f.name, yol: f.yol, durum })
+        const kt = OGR_LISTESI.test(f.name) ? null : klasorTuru(f.yol)
+        const gst = (durum: string) => satirlar.push({ ad: f.name, yol: f.yol, durum: kt && !durum.startsWith('Atlandı') && !durum.startsWith('Veritabanı') ? `${durum} · ${TUR_AD[kt]}` : durum })
         if (f.name.normalize('NFC') === DB_ADI) { gst('Veritabanı dosyası, atlandı'); continue }
         const gsheet = f.mimeType === 'application/vnd.google-apps.spreadsheet'
         if (!gsheet && !DESTEK.test(f.name)) { gst(`Atlandı: desteklenmeyen tür (${f.mimeType.replace('application/', '')})`); continue }
@@ -169,11 +171,17 @@ export const useStore = create<State>((set, get) => ({
           (db.ogrenciler.length === 0 && (e.sinavId !== '' || OGR_LISTESI.test(e.ad))))
         // "Öğrenci Listesi" daha önce tanınmayıp Kontrol bekliyor'a düşmüşse (eski hata) yeniden denenir
         const yenidenDene = !!e && e.durum === 'Kontrol bekliyor' && OGR_LISTESI.test(e.ad)
+        // Dosya sonradan Denemeler/Föyler/Taramalar klasörüne taşındıysa yeniden işlemeye gerek yok: sınavın türü düzeltilir
+        if (e && e.durum === 'İşlendi' && e.sinavId && kt && db.sinavlar.some(s => s.id === e.sinavId && s.tur !== kt)) turDuzelt.push({ sinavId: e.sinavId, tur: kt })
         if (e && !eksik && !yenidenDene && e.sonDegisiklik === f.modifiedTime && e.durum !== 'Hata') { gst(e.durum === 'İşlendi' ? 'İşlendi' : e.durum + (e.ayrinti ? `: ${e.ayrinti}` : '')); continue }
         gst(eksik ? 'Veritabanında sonuçları yok, yeniden işlenecek' : yenidenDene ? 'Öğrenci listesi, yeniden denenecek' : e ? 'Değişmiş, işlenmeyi bekliyor' : 'Yeni, işlenmeyi bekliyor')
-        bek.push({ id: f.id, ad: f.name, yol: f.yol, mimeType: f.mimeType, modifiedTime: f.modifiedTime, tur: OGR_LISTESI.test(f.name) ? 'ogrenciListesi' : 'rapor' })
+        bek.push({ id: f.id, ad: f.name, yol: f.yol, mimeType: f.mimeType, modifiedTime: f.modifiedTime, tur: OGR_LISTESI.test(f.name) ? 'ogrenciListesi' : 'rapor', klasorTuru: kt })
       }
       set({ tarama: { klasor: klasorSayisi, toplam: dosyalar.length, satirlar, zaman: new Date().toISOString() }, hata: null })
+      if (turDuzelt.length) {
+        for (const d of turDuzelt) { const s = db.sinavlar.find(x => x.id === d.sinavId); if (s) s.tur = d.tur }
+        await get().kaydet(['sinavlar'])
+      }
       bek.sort((a, b) => Number(b.tur === 'ogrenciListesi') - Number(a.tur === 'ogrenciListesi') || a.ad.localeCompare(b.ad, 'tr'))
       set({ bekleyenler: bek })
     } catch (e) { set({ hata: (e as Error).message }) }
@@ -221,11 +229,13 @@ export const useStore = create<State>((set, get) => ({
             const m = `${c.veri.dogrulanamayan} hücrede net doğrulanamadı, önizlemeyle kontrol edin`
             kaydet(b, 'Kontrol bekliyor', m); ozet.hata.push(`${b.ad}: ${m}`); continue
           }
+          if (b.klasorTuru) c.veri.tur = b.klasorTuru
           const n = netIsle(db, c.veri, b.id, b.modifiedTime)
+          if (b.klasorTuru) { const s = db.sinavlar.find(x => x.id === n.sinavId); if (s) s.tur = b.klasorTuru }
           ;(['sinavlar', 'ders_sonuclari', 'lgs_puanlari'] as TabAdi[]).forEach(t => dokunulan.add(t))
           const uyar = [n.atlanan ? `${n.atlanan} satır öğrenci listesinde olmadığı için atlandı` : '', ...c.veri.uyarilar].filter(Boolean)
           kaydet(b, 'İşlendi', uyar.join('; '), n.sinavId)
-          ozet.satirlar.push(`${c.veri.sinavAd}: ${n.eslesen} öğrenci için net işlendi${uyar.length ? ` (${uyar.join('; ')})` : ''}`)
+          ozet.satirlar.push(`${c.veri.sinavAd} (${TUR_AD[c.veri.tur]}): ${n.eslesen} öğrenci için net işlendi${uyar.length ? ` (${uyar.join('; ')})` : ''}`)
           continue
         }
         const wb = okuBuffer(veri, b.ad)
@@ -238,10 +248,11 @@ export const useStore = create<State>((set, get) => ({
         }
         const c = kazanimCoz(wb, b.ad, db.ayarlar.sablonlar)
         if (!c.ok) { kaydet(b, 'Kontrol bekliyor', c.neden); ozet.hata.push(`${b.ad}: ${c.neden}, "Kontrol bekliyor" listesine alındı`); continue }
+        if (b.klasorTuru) c.veri.tur = b.klasorTuru
         const o = kazanimIsle(db, c.veri, b.id, b.modifiedTime)
         ;(['sinavlar', 'ders_sonuclari', 'kazanim_sonuclari', 'ogrenciler'] as TabAdi[]).forEach(t => dokunulan.add(t))
         kaydet(b, 'İşlendi', o.tarihKaynagi === 'degisiklik' ? 'Tarih dosya değişiklik tarihinden alındı' : '', o.sinavId)
-        ozet.satirlar.push(`${c.veri.sinavAd}: ${o.ogrenci} öğrenci${o.yeniOgrenci ? `, ${o.yeniOgrenci} listede olmayan öğrenci eklendi` : ''}${o.tarihKaynagi === 'degisiklik' ? ' (tarih dosya tarihinden)' : ''}`)
+        ozet.satirlar.push(`${c.veri.sinavAd} (${TUR_AD[c.veri.tur]}): ${o.ogrenci} öğrenci${o.yeniOgrenci ? `, ${o.yeniOgrenci} listede olmayan öğrenci eklendi` : ''}${o.tarihKaynagi === 'degisiklik' ? ' (tarih dosya tarihinden)' : ''}`)
       } catch (e) {
         kaydet(b, 'Hata', (e as Error).message); ozet.hata.push(`${b.ad}: ${(e as Error).message}`)
       }
