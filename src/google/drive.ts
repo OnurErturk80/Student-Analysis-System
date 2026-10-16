@@ -49,6 +49,10 @@ export async function indir(f: DriveDosya): Promise<ArrayBuffer> {
     : `${D}/${f.id}?alt=media&supportsAllDrives=true`
   return gapi<ArrayBuffer>(url)
 }
+/** Yalnızca uygulamanın oluşturduğu dosyalar (veritabanı) için: ad değiştir / çöpe at */
+export async function guncelle(dosyaId: string, alanlar: { name?: string; trashed?: boolean }) {
+  await gapi(`${D}/${dosyaId}?supportsAllDrives=true`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(alanlar) })
+}
 export async function tasi(dosyaId: string, klasorId: string) {
   await gapi(`${D}/${dosyaId}?addParents=${klasorId}&supportsAllDrives=true`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: '{}' })
 }

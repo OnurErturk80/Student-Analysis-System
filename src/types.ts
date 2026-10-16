@@ -26,7 +26,7 @@ export interface KurKaydi { id: string; ogrenciNo: string; tur: KurTuru; tarih: 
 export interface Gorusme { id: string; ogrenciNo: string; uyariAnahtar: string; uyariMetni: string; durum: 'Bekliyor' | 'Görüşüldü'; tarih: string; not: string }
 export interface IslenenDosya {
   dosyaId: string; ad: string; sonDegisiklik: string
-  durum: 'İşlendi' | 'Kontrol bekliyor' | 'Hata'; ayrinti: string; sinavId: string; islenmeTarihi: string
+  durum: 'İşlendi' | 'Kontrol bekliyor' | 'Hata' | 'Arşiv'; ayrinti: string; sinavId: string; islenmeTarihi: string
 }
 
 export interface SutunSablonu {

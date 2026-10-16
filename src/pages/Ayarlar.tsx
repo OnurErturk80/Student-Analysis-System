@@ -1,6 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '../store'
-import { Baslik, Kart } from '../ui/bits'
+import { Baslik, Kart, Modal } from '../ui/bits'
+import { arsivleriBul } from '../google/sheets'
+import type { DriveDosya } from '../google/drive'
+import { arsivEtiketi } from '../analysis/arsiv'
+import { bugun } from '../lib/weeks'
 import { WHATSAPP_VARSAYILAN, KURLAR, type Esikler } from '../types'
 
 type SayiAnahtar = Exclude<keyof Esikler, 'lidepEsik'>
@@ -17,6 +21,13 @@ const ALANLAR: { k: SayiAnahtar; ad: string; ek: string }[] = [
 export default function Ayarlar() {
   const { db, ayarKaydet, mod, email, klasoruDegistir, cikis, tumunuYenidenIsle, dbSayisi, dbId, yenidenYukle } = useStore()
   const [yenidenMesaj, setYenidenMesaj] = useState('')
+  const klasorId = useStore(s => s.klasorId)
+  const [arsivler, setArsivler] = useState<DriveDosya[]>([])
+  const [arsivAc, setArsivAc] = useState(false)
+  const [kurTasi, setKurTasi] = useState(true)
+  const [arsivDurum, setArsivDurum] = useState<{ calisiyor?: boolean; hata?: string; tamam?: string }>({})
+  useEffect(() => { if (mod === 'google' && klasorId) arsivleriBul(klasorId).then(setArsivler).catch(() => {}) }, [mod, klasorId, arsivDurum.tamam])
+  const etiket = arsivEtiketi(db, bugun())
   const [e, setE] = useState<Esikler>({ ...db.ayarlar.esikler })
   const [wa, setWa] = useState(db.ayarlar.whatsappSablonu)
   const [mailler, setMailler] = useState(db.ayarlar.izinliEposta.join('\n'))
@@ -65,6 +76,34 @@ export default function Ayarlar() {
         {mod === 'google' && dbSayisi > 1 && <p className="mt-3 text-sm rounded-xl bg-warn text-down px-3 py-2" role="alert">Klasörde <b>{dbSayisi}</b> adet “SAS Veritabanı” var. Uygulama ilk oluşturulanı kullanıyor. Fazla kopyalar yanlışlıkla oluşmuştur; Drive’da inceleyip gereksiz olanları silebilirsiniz.</p>}
         {mod === 'google' && dbId && <div className="flex gap-2 mt-3 flex-wrap"><a className="btn" href={`https://docs.google.com/spreadsheets/d/${dbId}`} target="_blank" rel="noreferrer">Veritabanını Drive’da aç</a><button className="btn" onClick={() => void yenidenYukle('Veriler Drive’dan yeniden okundu.')}>Drive’dan yeniden oku</button></div>}
       </Kart>
+      <Kart>
+        <Baslik>Yıl sonu arşivleme</Baslik>
+        <p className="text-[15px]">Eğitim yılı bitince bu yılın verilerini arşive alıp yeni yıla temiz bir veritabanıyla başlayın. Hiçbir şey silinmez: mevcut veritabanı <b>“SAS Veritabanı – Arşiv {etiket}”</b> adıyla aynı Drive klasöründe kalır ve oradan açılabilir.</p>
+        <ul className="text-sm text-muted mt-2 list-disc pl-5 space-y-0.5">
+          <li>Yeni yıla taşınır: ayarlar ve şablonlar, öğrenciler ve veli bilgileri, isterseniz öğrencilerin güncel kurları.</li>
+          <li>Arşivde kalır: sınav sonuçları, kazanımlar, LGS puanları, kur geçmişi, veli görüşmeleri.</li>
+          <li>Geçen yılın rapor dosyaları yeni yıla yeniden alınmaz; yeni yılın raporlarını Raporlar klasörüne ekleyin. Öğrenci listesi yeniden işlenir.</li>
+        </ul>
+        {mod === 'google'
+          ? <button className="btn mt-3" onClick={() => { setArsivDurum({}); setArsivAc(true) }}>Yılı arşivle ve yeni yıla başla</button>
+          : <p className="text-sm text-muted mt-3">Demo modunda arşivleme yapılamaz.</p>}
+        {arsivDurum.tamam && <p className="text-sm text-up mt-2" role="status">{arsivDurum.tamam}</p>}
+        {arsivler.length > 0 && <div className="mt-3"><div className="text-sm font-semibold mb-1">Arşivlenmiş yıllar</div><ul className="space-y-1">{arsivler.map(a => <li key={a.id}><a className="text-accent font-medium" href={`https://docs.google.com/spreadsheets/d/${a.id}`} target="_blank" rel="noreferrer">{a.name}</a></li>)}</ul></div>}
+      </Kart>
+      {arsivAc && (
+        <Modal baslik="Yılı arşivle" kapat={() => !arsivDurum.calisiyor && setArsivAc(false)}>
+          <p className="text-[15px]">Bu yılın verileri <b>“SAS Veritabanı – Arşiv {etiket}”</b> adıyla arşive alınacak ve yeni, boş bir veritabanı açılacak. Panel, uyarılar ve grafikler yeni yılın ilk sınavına kadar boş görünecek.</p>
+          <label className="flex items-center gap-2 min-h-11 mt-2"><input type="checkbox" className="!min-h-0 w-5 h-5" checked={kurTasi} onChange={x => setKurTasi(x.target.checked)} />Öğrencilerin güncel Matematik ve LİDEP kurlarını yeni yıla taşı</label>
+          {arsivDurum.hata && <p className="text-sm text-down mt-2" role="alert">{arsivDurum.hata}</p>}
+          <div className="flex gap-2 mt-4">
+            <button className="btn flex-1" disabled={arsivDurum.calisiyor} onClick={() => setArsivAc(false)}>Vazgeç</button>
+            <button className="btn btn-primary flex-1" disabled={arsivDurum.calisiyor} onClick={async () => {
+              setArsivDurum({ calisiyor: true })
+              try { const r = await useStore.getState().yilSonuArsivle(kurTasi); setArsivDurum({ tamam: `Arşivlendi: “${r.arsivAdi}”. Yeni yıl veritabanı hazır.` }); setArsivAc(false) }
+              catch (e) { setArsivDurum({ hata: (e as Error).message }) }
+            }}>{arsivDurum.calisiyor ? 'Arşivleniyor…' : 'Arşivle ve yeni yıla başla'}</button>
+          </div>
+        </Modal>)}
       <Kart>
         <Baslik>Hesap ve Drive klasörü</Baslik>
         <p className="text-[15px]">{mod === 'demo' ? 'Demo modu (sahte veri)' : <>Giriş: <b>{email}</b></>}</p>
