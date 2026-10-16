@@ -6,9 +6,15 @@ import { listele, GSHEET, tasi } from './drive'
 
 const S = 'https://sheets.googleapis.com/v4/spreadsheets'
 export const DB_ADI = 'SAS Veritabanı'
+export const ARSIV_ONEKI = 'SAS Veritabanı – Arşiv'
 const TABLAR = Object.keys(SEKMELER) as TabAdi[]
 const sutunHarf = (n: number) => { let s = ''; for (n++; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s; return s }
 
+/** Klasördeki arşivlenmiş yıllar (en yeni önce) */
+export async function arsivleriBul(klasorId: string) {
+  const l = await listele(`'${klasorId}' in parents and mimeType='${GSHEET}' and name contains 'Arşiv'`)
+  return l.filter(f => f.name.normalize('NFC').startsWith(ARSIV_ONEKI)).sort((a, b) => b.name.localeCompare(a.name, 'tr'))
+}
 /** Klasördeki tüm "SAS Veritabanı" dosyaları, en eski önce (ilk oluşturulan asıl veritabanıdır; sonradan çıkan kopyalar yanlışlıkla oluşmuştur) */
 export async function dbBulHepsi(klasorId: string) {
   const l = await listele(`'${klasorId}' in parents and mimeType='${GSHEET}' and name='${DB_ADI}'`)

@@ -97,6 +97,14 @@ Student Analysis System/
 - **Karne PDF’i**: öğrenci sayfasındaki **Karne** düğmesi A4 gelişim karnesi üretir (ders tablosu, haftalık grafik, çalışılacak kazanımlar, LGS, kur geçmişi, not satırları). Görüşme notları karneye **konmaz**. Türkçe karakterler için Liberation Sans yazı tipi (`public/fonts`) kullanılır.
 - Eski veritabanlarında eksik sekmeler (ör. `lgs_puanlari`) ilk açılışta otomatik eklenir.
 
+## Yıl sonu arşivleme
+Ayarlar → **Yıl sonu arşivleme → Yılı arşivle ve yeni yıla başla**.
+- Mevcut veritabanı silinmez; **“SAS Veritabanı – Arşiv 2026-2027”** adıyla aynı klasörde kalır (Ayarlar’da bağlantısı listelenir). Yıl etiketi son sınavın tarihinden (Eylül–Ağustos) hesaplanır.
+- Yeni, boş bir “SAS Veritabanı” açılır. Taşınanlar: ayarlar ve şablonlar, aktif öğrenciler ve veli bilgileri, isteğe bağlı olarak öğrencilerin güncel kurları.
+- Arşivde kalanlar: sınav ve kazanım sonuçları, LGS puanları, kur geçmişi, veli görüşmeleri.
+- Geçen yılın rapor dosyaları “Arşiv” olarak işaretlenir ve yeni yıla yeniden alınmaz. Öğrenci listesi yeniden işlenir.
+- Bir adım başarısız olursa işlem geri alınır (eski veritabanının adı geri verilir). Aynı yıl ikinci kez arşivlenemez.
+
 ## Sürümler
 - **Faz 1** (bu sürüm): Google girişi, klasör seçimi, öğrenci listesi, Excel kazanım okuma + sütun şablonu, “Analiz Et”, Panel, Öğrenci detayı + grafikler, Şube haritası, Kazanım analizi, Veli uyarıları (ara/WhatsApp/not), Kur önerileri (Matematik), Ayarlar.
 - **Faz 2** (tamam): PDF net okuma, kur listesi içe aktarma, CSV, “Kontrol bekliyor” düzenlenebilir önizleme.

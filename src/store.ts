@@ -6,7 +6,9 @@ import { kazanimIsle, kurIsle, netIsle, ogrenciListesiIsle } from './analysis/in
 import { demoDB, demoNetEkle, demoPuanEkle, demoYeniHafta } from './data/demo'
 import { CLIENT_ID, cikisYap, eposta, girisYap, kayitliEposta, kayitliOturum, oturumDinle } from './google/auth'
 import { agacDosyalari, indir, klasorAra, klasorBilgi, KLASOR, type DriveDosya } from './google/drive'
-import { dbBulHepsi, dbKaydet, dbOlustur, dbYukle, DB_ADI, SurumCakismasi, uzakSurum } from './google/sheets'
+import { ARSIV_ONEKI, arsivleriBul, dbBulHepsi, dbKaydet, dbOlustur, dbYukle, DB_ADI, SurumCakismasi, uzakSurum } from './google/sheets'
+import { guncelle } from './google/drive'
+import { arsivEtiketi, yeniYilDB } from './analysis/arsiv'
 import { kazanimCoz, klasorTuru, okuBuffer, parmakIzi, TUR_AD, type Cozum } from './parsers/kazanim'
 import { ogrenciListesiAdi, ogrenciListesiCoz } from './parsers/ogrenciListesi'
 import { pdfOku } from './parsers/pdfYukle'
@@ -64,6 +66,7 @@ interface State {
   kaydet(tablar: TabAdi[]): Promise<void>
   yenidenYukle(mesaj?: string): Promise<void>
   tumunuYenidenIsle(): Promise<void>
+  yilSonuArsivle(kurlariTasi: boolean): Promise<{ arsivAdi: string; arsivId: string }>
   otomatikGiris(): Promise<void>
   oturumYenile(): Promise<void>
   hesapDegistir(): Promise<void>
@@ -276,6 +279,33 @@ export const useStore = create<State>((set, get) => ({
     try { await dbKaydet(get().dbId!, get().db, tablar) } catch (e) {
       if (e instanceof SurumCakismasi) await get().yenidenYukle(CAKISMA)
       else { set({ hata: 'Kaydedilemedi: ' + (e as Error).message }); throw e }
+    }
+  },
+  /** Yıl sonu: mevcut veritabanı "SAS Veritabanı – Arşiv 2026-2027" adıyla klasörde kalır, yerine yeni yıl veritabanı açılır. */
+  async yilSonuArsivle(kurlariTasi) {
+    const { mod, dbId, klasorId } = get()
+    if (mod !== 'google' || !dbId || !klasorId) throw new Error('Arşivleme yalnızca Google ile giriş yapılmışken kullanılabilir.')
+    const db = get().db
+    if ((await uzakSurum(dbId)) !== db.surum) { await get().yenidenYukle(CAKISMA); throw new Error(CAKISMA) }
+    const gun = bugun()
+    const etiket = arsivEtiketi(db, gun)
+    const arsivAdi = `${ARSIV_ONEKI} ${etiket}`
+    if ((await arsivleriBul(klasorId)).some(f => f.name.normalize('NFC') === arsivAdi))
+      throw new Error(`“${arsivAdi}” zaten var; bu yıl daha önce arşivlenmiş olabilir. Drive’da kontrol edin.`)
+    await guncelle(dbId, { name: arsivAdi }) // başarısız olursa hiçbir şey değişmemiş olur
+    let yeniId: string | null = null
+    try {
+      yeniId = await dbOlustur(klasorId)
+      const yeni = yeniYilDB(db, { kurlariTasi, bugun: gun, etiket })
+      await dbKaydet(yeniId, yeni)
+      set({ dbId: yeniId, ...yenile(yeni), dbSayisi: 1, hata: null })
+      void get().tara()
+      return { arsivAdi, arsivId: dbId }
+    } catch (e) {
+      // geri al: yeni dosyayı çöpe at, eski veritabanının adını geri ver
+      try { if (yeniId) await guncelle(yeniId, { trashed: true }) } catch { /* */ }
+      try { await guncelle(dbId, { name: DB_ADI }) } catch { /* */ }
+      throw new Error('Arşivleme tamamlanamadı, veriler eski hâlinde bırakıldı: ' + (e as Error).message)
     }
   },
   /** İşlenen dosya kayıtlarını siler; sonraki taramada tüm dosyalar yeniden işlenir */
