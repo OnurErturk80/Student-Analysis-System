@@ -63,10 +63,18 @@ Gerçek örnek dosyalarla ayrıştırıcı testi için (dosyalar depoya girmez):
 ```
 Student Analysis System/
 ├─ Öğrenci Listesi.xlsx      (her şube ayrı sekme: 8_A, 8_B …)
-├─ Raporlar/                 (haftalık alt klasörler olabilir)
+├─ Raporlar/
+│  ├─ Denemeler/             (LGS deneme sınavları: Excel kazanım raporu + PDF toplu sonuç)
+│  ├─ Föyler/                (kazanım föyleri)
+│  └─ Taramalar/             (tek derslik tarama sınavları)
 └─ SAS Veritabanı            (uygulama ilk açılışta kendisi oluşturur)
 ```
 İlk girişte klasörü uygulamada seçersiniz.
+
+**Sınav türü klasörden gelir:** Denemeler / Föyler / Taramalar klasörlerindeki dosyalar o türde sayılır (alt klasör de açabilirsiniz, ör. `Denemeler/Hafta 6`). Bu üç klasörün dışındaki dosyalarda tür dosya adından tahmin edilir. Önceden işlenmiş bir dosyayı sonradan doğru klasöre taşırsanız yeniden işlemeye gerek kalmaz; tür bir sonraki taramada düzeltilir.
+- **Deneme:** genel başarıya ve LGS tahminine girer.
+- **Föy:** genel başarıya girer, LGS tahminine girmez.
+- **Tarama:** yalnızca ilgili dersin grafiğine girer.
 
 ### D) iPhone / iPad / Mac ana ekranına ekleme
 - **iPhone/iPad (Safari)**: Paylaş düğmesi → **Ana Ekrana Ekle** (simge altında “SAS” yazar).
