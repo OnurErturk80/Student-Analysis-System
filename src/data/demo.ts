@@ -30,7 +30,7 @@ function haftaDosyasi(db: DB, hafta: number, ad: string, tarih: string, r: () =>
       let ders_yuzde = p.baz[ders] + (r() - 0.5) * 8
       const senaryo = o.no === '214' || o.no === '231' || o.no === '305'
       // Senaryolar: ekran görüntüsündeki örnek öğrenciler
-      if (o.no === '214' && ders === 'Matematik') ders_yuzde = [74, 76, 75, 78, 64, 52, 49][hafta] ?? 50
+      if (o.no === '214' && ders === 'Matematik') ders_yuzde = [74, 76, 75, 78, 64, 52, 40][hafta] ?? 40
       if (o.no === '231' && ders === 'Fen Bilimleri') ders_yuzde = [80, 78, 77, 70, 62, 51, 45][hafta] ?? 45
       if (o.no === '305') ders_yuzde = [42, 40, 41, 39, 38, 38, 37][hafta] ?? 37
       for (const [kod, kad] of kazs) {
